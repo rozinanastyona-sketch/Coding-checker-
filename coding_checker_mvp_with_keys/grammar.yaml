@@ -1,0 +1,171 @@
+version: "0.1"
+
+columns:
+  required:
+    - Time_Relative_hms
+    - Observation
+    - Behavior
+    - Comment
+
+  modifier_columns:
+    rule: "variable"
+    detect_by_prefix: "Modifier"
+    compare_column_position: false
+    ignore_empty_modifiers: true
+
+utterance_detection:
+  start_behavior: "Utterance start"
+  stop_behavior: "Utterance stop"
+
+  intent_behaviors:
+    - "Communicative Intent Present"
+    - "Communicative Intent Absent"
+
+  utterance_text_rule:
+    expected_in_behavior: "Communicative Intent Present"
+    comment_required: true
+
+  ignore_comment_prefixes:
+    - "USV:"
+
+  duplicate_start_stop:
+    ignore: true
+    reason: "Observer app bug, not student error"
+
+  missing_stop_rule:
+    if_next_start_after_completed_utterance: "close_previous_utterance"
+    if_unclear: "mark_boundary_unclear"
+
+colors:
+  error: "FF9999"          # red
+  usv_missing_note: "F4B183" # orange
+  boundary_unclear: "C9A0DC" # purple
+
+sequence:
+  - rank: 1
+    group: "Communicative Intent"
+    required: true
+    behaviors:
+      - "Communicative Intent Present"
+      - "Communicative Intent Absent"
+
+  - rank: 2
+    group: "Listing"
+    required: true
+    behaviors:
+      - "Listing is Present"
+      - "Listing Not Present"
+
+  - rank: 3
+    group: "Imitative"
+    required: true
+    behaviors:
+      - "Non-imitative"
+      - "Imitative - Spoken + Aided Model"
+      - "Imitative - Spoken Model Only"
+      - "Imitative - Aided Model Only"
+
+  - rank: 4
+    group: "Independent Aided Utterances"
+    required: true
+    behaviors:
+      - "Independent Utterance"
+      - "Co-constructed Utterance"
+
+  - rank: 5
+    group: "Number of Symbols"
+    required: true
+    behaviors:
+      - "Number of Symbols"
+    modifier_type: "integer"
+    min: 0
+    max: 20
+
+  - rank: 6
+    group: "Number of Relevant Symbols"
+    required: true
+    behaviors:
+      - "Number of Relevant Symbols"
+    modifier_type: "integer"
+    min: 0
+    max: 20
+
+  - rank: 7
+    group: "Word Order"
+    required: true
+    behaviors:
+      - "Word Order score"
+    allowed_modifiers:
+      - "0.0"
+      - "0.5"
+      - "1.0"
+
+  - rank: 8
+    group: "SV"
+    required: true
+    behaviors:
+      - "SV"
+      - "No SV"
+    allowed_modifiers:
+      - "Lexical Verb"
+      - "Non-lexical Verb"
+      - "Unique Subject-Verb Combination (USV)"
+      - "Repeated SV Combination"
+      - "Subject-Verb Agreement (is, am, are) Present"
+      - "Subject-Verb Agreement (is, am, are) Abscent"
+
+  - rank: 9
+    group: "Parts of Speech"
+    required: true
+    behaviors:
+      - "Parts of speech Present"
+      - "Parts of speech Absent (no relev. symbols or infl. morph.only)"
+    allowed_modifiers:
+      - "noun"
+      - "pronoun"
+      - "verb"
+      - "adjective"
+      - "adverb"
+      - "preposition"
+      - "conjunction"
+      - "determiner"
+
+  - rank: 10
+    group: "Inflectional Morphemes"
+    required: true
+    behaviors:
+      - "No appropriate inflectional morphemes"
+      - "At least one appropriate inflectional morpheme"
+
+  - rank: 11
+    group: "Grammatical Intent"
+    required: true
+    behaviors:
+      - "Grammatical Intent Clear"
+      - "Grammatical Intent NOT Clear/ No Grammar"
+
+special_rules:
+  - name: "USV comment required"
+    if_behavior: "SV"
+    required_modifiers:
+      - "Lexical Verb"
+      - "Unique Subject-Verb Combination (USV)"
+    then_comment_must_start_with: "USV:"
+    color_if_missing: "orange"
+
+aliases:
+  "Listing is Present":
+    - "Listing Present (3 or more symbols of one part of speech)"
+    - "Listing is present: 3+ symbols of same part of speech"
+
+  "Listing Not Present":
+    - "Listing is Not Present"
+    - "Listing Not present"
+
+output:
+  keep_student_order: true
+  do_not_reorder_rows: true
+  insert_missing_rows: true
+  missing_row_label: "MISSING"
+  correct_rows_no_color: true
+  first_utterances_in_passport: 5
