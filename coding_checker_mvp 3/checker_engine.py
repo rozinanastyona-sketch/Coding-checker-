@@ -10,6 +10,7 @@ import shutil
 import pandas as pd
 import yaml
 from openpyxl import load_workbook
+from openpyxl.comments import Comment as CellComment
 from openpyxl.styles import PatternFill, Font
 from openpyxl.utils import get_column_letter
 
@@ -62,6 +63,24 @@ class Utterance:
         return self.rows[0].original_index if self.rows else -1
 
     @property
+    def anchor_row_index(self) -> int:
+        """Row to attach an utterance-level flag to.
+
+        first_row_index is often a stray "utterance start" marker (Observer
+        duplicates them, and coders sometimes retype the transcript on one),
+        which makes the highlight land on a meaningless row. Prefer the
+        Communicative Intent row, then the first coded row.
+        """
+        for row in self.rows:
+            if behavior_in(row.behavior, ("Communicative Intent Present", "Communicative Intent Absent")):
+                return row.original_index
+        for row in self.rows:
+            b = behavior_key(row.behavior)
+            if not b.startswith("utterance start") and not b.startswith("utterance stop"):
+                return row.original_index
+        return self.first_row_index
+
+    @property
     def last_row_index(self) -> int:
         return self.rows[-1].original_index if self.rows else -1
 
@@ -106,10 +125,14 @@ class Utterance:
 
         # Fallback: the CI row is missing entirely (real key files contain
         # utterances coded without one). The transcript then sits in the
-        # Comment of whatever coding row came first, so use that rather than
-        # leaving the utterance textless and unalignable. Start/stop marker
-        # rows carry no comment, so they are skipped naturally.
+        # Comment of the next coding row. Start/stop markers are skipped
+        # explicitly: coders sometimes retype the previous transcript on a
+        # stray marker row, which would otherwise be picked up as this
+        # utterance's text.
         for row in self.rows:
+            b = behavior_key(row.behavior)
+            if b.startswith("utterance start") or b.startswith("utterance stop"):
+                continue
             got = extract(clean_text(row.comment))
             if got:
                 return got
@@ -130,7 +153,96 @@ class Issue:
 
 def load_grammar(path: str | Path) -> Dict[str, Any]:
     with open(path, "r", encoding="utf-8") as f:
-        return yaml.safe_load(f)
+        grammar = yaml.safe_load(f)
+    # Student-facing wording lives in feedback.yaml next to grammar.yaml, so the
+    # lab can reword feedback without touching either the code or the coding scheme.
+    fb_path = Path(path).with_name("feedback.yaml")
+    if fb_path.exists():
+        with open(fb_path, "r", encoding="utf-8") as f:
+            grammar["feedback"] = yaml.safe_load(f) or {}
+    else:
+        grammar["feedback"] = {}
+    return grammar
+
+
+def _fmt(value: Any, decimals: bool = False) -> str:
+    """Render a modifier value for a student.
+
+    Counts read better as whole numbers (4.0 -> 4). Word Order scores use
+    halves (0.0 / 0.5 / 1.0) and are passed decimals=True, so "you coded: 0.0"
+    doesn't read like a truncated sentence.
+    """
+    s = clean_text(value)
+    if not s:
+        return "-"
+    try:
+        f = float(s)
+    except ValueError:
+        return s
+    if f != int(f):
+        return str(f)
+    return f"{f:.1f}" if decimals else str(int(f))
+
+
+# Categories whose values are scores rather than counts, so 0 -> "0.0".
+DECIMAL_CATEGORIES = {"Word Order"}
+
+
+def _join(values: Iterable[Any], decimals: bool = False) -> str:
+    vals = [_fmt(v, decimals) for v in values if clean_text(v)]
+    return ", ".join(vals) if vals else "-"
+
+
+def short_label(grammar: Dict[str, Any], value: str) -> str:
+    """Shorten a long official behavior name for use inside a comment."""
+    labels = grammar.get("feedback", {}).get("value_labels", {}) or {}
+    for full, short in labels.items():
+        if behavior_equals(full, value):
+            return str(short)
+    return value
+
+
+def render_feedback(
+    grammar: Dict[str, Any],
+    category: Optional[str],
+    situation: str,
+    utterance: str = "",
+    key: str = "",
+    found: str = "",
+    missing: str = "",
+    extra: str = "",
+) -> str:
+    """Build the student-facing comment for one issue from feedback.yaml."""
+    fb = grammar.get("feedback", {})
+    template = None
+    if category:
+        template = (fb.get("categories", {}).get(category, {}) or {}).get(situation)
+    if template is None:
+        template = (fb.get("other", {}) or {}).get(situation)
+    if template is None:
+        template = (fb.get("fallback", {}) or {}).get(situation)
+    if template is None:
+        template = "{category} - key: {key}, you coded: {found}."
+
+    text = str(template).format(
+        category=category or "",
+        utterance=utterance,
+        key=key or "-",
+        found=found or "-",
+        missing=missing or "-",
+        extra=extra or "-",
+    )
+    return " ".join(text.split())
+
+
+def conditional_modifier_note(grammar: Dict[str, Any], modifier: str, utterance: str) -> Optional[str]:
+    """Special explanation for modifiers that only apply under a condition."""
+    table = grammar.get("feedback", {}).get("conditional_modifiers", {}) or {}
+    for name, cfg in table.items():
+        if behavior_equals(name, modifier):
+            text = str((cfg or {}).get("explanation", "")).format(utterance=utterance)
+            return " ".join(text.split()) or None
+    return None
 
 
 def clean_text(value: Any) -> str:
@@ -359,22 +471,86 @@ def modifier_set(row: Optional[EventRow]) -> set[str]:
     return {norm(m) for m in row.modifiers if norm(m)}
 
 
-def validate_row_against_key(student_row: EventRow, key_row: EventRow, entry: Dict[str, Any]) -> Optional[str]:
+def validate_row_against_key(
+    student_row: EventRow,
+    key_row: EventRow,
+    entry: Dict[str, Any],
+    grammar: Dict[str, Any],
+    utterance_text: str = "",
+    key_text: str = "",
+) -> Optional[str]:
+    """Return the student-facing comment for this row, or None if it matches the key.
+
+    When the student's transcript itself differs from the key's, a category may
+    supply a "<situation>_transcript_differs" template: e.g. a wrong symbol count
+    usually needs no explanation, but if the utterance was transcribed wrongly in
+    the first place, the count follows from that and the student should be told so.
+    """
+    category = entry.get("group")
+    transcript_differs = bool(
+        utterance_text and key_text and _match_text(utterance_text) != _match_text(key_text)
+    )
+
+    def feedback(situation: str, **kw) -> str:
+        if transcript_differs:
+            variant = render_feedback(grammar, category, situation + "_transcript_differs", **kw)
+            # render_feedback falls back to the generic template when the variant is
+            # absent; detect that by checking the category actually defines it.
+            defined = (grammar.get("feedback", {}).get("categories", {})
+                       .get(category, {}) or {}).get(situation + "_transcript_differs")
+            if defined:
+                return variant
+        return render_feedback(grammar, category, situation, **kw)
+
     if not behavior_equals(student_row.behavior, key_row.behavior):
-        return f"Expected Behavior: {key_row.behavior}; found: {student_row.behavior}"
+        return feedback(
+            "wrong_value",
+            utterance=utterance_text,
+            key=short_label(grammar, key_row.behavior),
+            found=short_label(grammar, student_row.behavior),
+        )
 
     expected_mods = modifier_set(key_row)
     student_mods = modifier_set(student_row)
-    if expected_mods != student_mods:
-        missing = sorted(expected_mods - student_mods)
-        extra = sorted(student_mods - expected_mods)
-        parts = []
-        if missing:
-            parts.append("Missing modifiers: " + ", ".join(missing))
-        if extra:
-            parts.append("Extra modifiers: " + ", ".join(extra))
-        return "; ".join(parts)
-    return None
+    if expected_mods == student_mods:
+        return None
+
+    dec = category in DECIMAL_CATEGORIES
+
+    missing = sorted(expected_mods - student_mods)
+    extra = sorted(student_mods - expected_mods)
+
+    # A modifier that only applies under a condition (e.g. Subject-Verb Agreement
+    # needs a 'to be' verb) gets its own explanation rather than a bare "extra".
+    notes = []
+    unexplained_extra = []
+    for m in extra:
+        note = conditional_modifier_note(grammar, m, utterance_text)
+        if note:
+            notes.append(note)
+        else:
+            unexplained_extra.append(m)
+
+    if missing:
+        notes.insert(0, feedback(
+            "missing_mods",
+            utterance=utterance_text,
+            key=_join(sorted(expected_mods), dec),
+            found=_join(sorted(student_mods), dec),
+            missing=_join(missing, dec),
+            extra=_join(unexplained_extra, dec),
+        ))
+    elif unexplained_extra:
+        notes.insert(0, feedback(
+            "extra_mods",
+            utterance=utterance_text,
+            key=_join(sorted(expected_mods), dec),
+            found=_join(sorted(student_mods), dec),
+            missing=_join(missing, dec),
+            extra=_join(unexplained_extra, dec),
+        ))
+
+    return " ".join(notes) if notes else None
 
 
 def check_usv_rule(student_utt: Utterance, grammar: Dict[str, Any]) -> Optional[Issue]:
@@ -394,7 +570,8 @@ def check_usv_rule(student_utt: Utterance, grammar: Dict[str, Any]) -> Optional[
                     return Issue(
                         kind="usv_missing_note",
                         color=grammar["colors"]["usv_missing_note"],
-                        message=f"SV is Lexical + Unique, but Comment does not contain '{prefix}'",
+                        message=render_feedback(grammar, None, "usv_missing_note",
+                                                utterance=student_utt.utterance_text),
                         row_index=row.original_index,
                         utterance_id=student_utt.uid,
                     )
@@ -410,12 +587,14 @@ def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict
         issues.append(Issue(
             kind="boundary_unclear",
             color=purple,
-            message="Utterance boundary could not be confidently detected; check manually.",
-            row_index=student_utt.first_row_index,
+            message=render_feedback(grammar, None, "boundary_unclear",
+                                    utterance=student_utt.utterance_text),
+            row_index=student_utt.anchor_row_index,
             utterance_id=student_utt.uid,
         ))
 
     previous_student_row: Optional[EventRow] = None
+    utterance_text = student_utt.utterance_text or key_utt.utterance_text
     for entry in grammar["sequence"]:
         key_row = find_row_by_group(key_utt, entry, grammar)
         student_row = find_row_by_group(student_utt, entry, grammar)
@@ -429,10 +608,16 @@ def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict
             expected = key_row.behavior
             if key_row.modifiers:
                 expected += " | " + " | ".join(key_row.modifiers)
+            key_desc = short_label(grammar, key_row.behavior)
+            if key_row.modifiers:
+                key_desc += " (" + _join(key_row.modifiers) + ")"
             issues.append(Issue(
                 kind="missing",
                 color=red,
-                message=f"MISSING: {expected}",
+                message=render_feedback(
+                    grammar, entry.get("group"), "missing_row",
+                    utterance=utterance_text, key=key_desc,
+                ),
                 insert_after_row_index=insert_after,
                 missing_behavior=key_row.behavior,
                 expected=expected,
@@ -440,7 +625,11 @@ def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict
             ))
             continue
 
-        msg = validate_row_against_key(student_row, key_row, entry)
+        msg = validate_row_against_key(
+            student_row, key_row, entry, grammar,
+            utterance_text=student_utt.utterance_text or utterance_text,
+            key_text=key_utt.utterance_text,
+        )
         if msg:
             issues.append(Issue(
                 kind="wrong",
@@ -462,7 +651,9 @@ def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict
             issues.append(Issue(
                 kind="extra",
                 color=red,
-                message=f"EXTRA code not expected in key utterance: {srow.behavior}",
+                message=render_feedback(grammar, None, "extra_code",
+                                        utterance=student_utt.utterance_text,
+                                        found=srow.behavior),
                 row_index=srow.original_index,
                 utterance_id=student_utt.uid,
             ))
@@ -578,6 +769,43 @@ def align_utterances(
     return pairs
 
 
+def check_transcript(student_utt: Utterance, key_utt: Utterance, grammar: Dict[str, Any]) -> List[Issue]:
+    """Flag a transcript that differs from the key's.
+
+    The codes can all be correct while the transcript itself is wrong (e.g.
+    a student transcribed "-S DOG BARN" where the key has "-S BARN DOG" -
+    same symbols, wrong order). Reviewers catch this by eye, so the checker
+    should too. Comparison ignores case, spacing and bracket/paren notation,
+    since relevance-marking is a separate judgment call and is not graded
+    here. This is a note-level (orange) issue: it does not affect the 1/0
+    Scores sheet, which only covers the 11 coding categories.
+    """
+    orange = grammar["colors"]["usv_missing_note"]
+    s_text, k_text = student_utt.utterance_text, key_utt.utterance_text
+    if not s_text or not k_text:
+        return []
+    if _match_text(s_text) == _match_text(k_text):
+        return []
+
+    ci_row = None
+    for row in student_utt.rows:
+        if behavior_in(row.behavior, grammar["utterance_detection"]["intent_behaviors"]):
+            ci_row = row
+            break
+    if ci_row is None:
+        return []
+
+    return [Issue(
+        kind="transcript_mismatch",
+        color=orange,
+        message=render_feedback(grammar, None, "transcript_mismatch",
+                                utterance=s_text, key=k_text),
+        row_index=ci_row.original_index,
+        utterance_id=student_utt.uid,
+        expected=k_text,
+    )]
+
+
 def compare_files_with_alignment(
     student_df: pd.DataFrame, key_df: pd.DataFrame, grammar: Dict[str, Any]
 ) -> Tuple[List[Issue], List[Utterance], List[Utterance], List[Tuple[Optional[int], Optional[int]]]]:
@@ -597,13 +825,16 @@ def compare_files_with_alignment(
     for s_idx, k_idx in pairs:
         if s_idx is not None and k_idx is not None:
             issues.extend(compare_utterances(student_utts[s_idx], key_utts[k_idx], grammar))
+            issues.extend(check_transcript(student_utts[s_idx], key_utts[k_idx], grammar))
             last_matched_student_row = student_utts[s_idx].last_row_index
         elif k_idx is not None:
             key_utt = key_utts[k_idx]
             issues.append(Issue(
                 kind="missing_utterance",
                 color=red,
-                message=f"MISSING whole utterance from key (key utt #{key_utt.uid}): {key_utt.utterance_text or 'no text'}",
+                message=render_feedback(grammar, None, "missing_utterance",
+                                        key=key_utt.utterance_text or "no transcript"),
+                expected=key_utt.utterance_text,
                 insert_after_row_index=last_matched_student_row,
             ))
         else:
@@ -611,8 +842,9 @@ def compare_files_with_alignment(
             issues.append(Issue(
                 kind="extra_utterance",
                 color=purple,
-                message="Extra student utterance (no matching utterance in key); check manually.",
-                row_index=student_utt.first_row_index,
+                message=render_feedback(grammar, None, "extra_utterance",
+                                        utterance=student_utt.utterance_text),
+                row_index=student_utt.anchor_row_index,
                 utterance_id=student_utt.uid,
             ))
             last_matched_student_row = student_utt.last_row_index
@@ -789,9 +1021,17 @@ def build_scores_rows(
             key_by_student_uid[student_utts[s_idx].uid] = key_utts[k_idx]
 
     for issue in issues:
-        if issue.utterance_id is None or issue.kind in ("boundary_unclear", "usv_missing_note", "extra_utterance"):
-            # usv_missing_note is a note-quality reminder (orange), not a
-            # key mismatch; boundary/extra flags are handled separately.
+        if issue.utterance_id is None or issue.kind in (
+            "boundary_unclear", "usv_missing_note", "extra_utterance",
+            "transcript_mismatch", "extra",
+        ):
+            # Note-level flags: reminders and manual-check prompts, not key
+            # mismatches. "extra" means the student coded a category the key
+            # does not code for this utterance (e.g. coding beyond the three
+            # categories required when Listing is present). It is still shown
+            # in the annotated sheet, but it costs no marks: the score sheet
+            # reflects only the utterances in the key and the way the key
+            # codes them. No penalty marks.
             continue
         s_utt = utt_by_uid.get(issue.utterance_id)
         k_utt = key_by_student_uid.get(issue.utterance_id)
@@ -878,6 +1118,7 @@ def write_annotated_excel(
     student_utts: Optional[List[Utterance]] = None,
     key_utts: Optional[List[Utterance]] = None,
     alignment: Optional[List[Tuple[Optional[int], Optional[int]]]] = None,
+    reviewer_notes: Optional[Dict[int, str]] = None,
 ) -> None:
     """Create a copy of the student's workbook with highlights and inserted MISSING rows.
 
@@ -962,7 +1203,31 @@ def write_annotated_excel(
         label = f"[Utt #{issue.utterance_id}"
         if text:
             label += f': "{text}"'
-        return label + "] "
+        return label + "]"
+
+    def annotate(excel_row: int, issue: Issue, label: str, with_note: bool = True) -> None:
+        """Short label in the cell, full feedback in a hover comment.
+
+        The feedback texts are long enough that putting them in the cell made
+        the sheet unreadable, so the cell shows only which utterance the issue
+        belongs to (or a one-word marker) and the explanation lives in an Excel
+        cell comment - the same way a human reviewer leaves notes.
+        Several issues on one row are merged into a single comment.
+        """
+        cell = ws.cell(row=excel_row, column=review_col)
+        existing_label = clean_text(cell.value)
+        cell.value = existing_label if existing_label else label
+        if not with_note:
+            # The label itself is the whole message (missing utterances), so a
+            # hover note would just repeat it.
+            return
+
+        previous = cell.comment.text if cell.comment else ""
+        body = (previous + "\n\n" if previous else "") + issue.message
+        c = CellComment(body, "Coding Checker")
+        c.width = 420
+        c.height = max(90, 26 * (body.count("\n") + body.count(". ") + 2))
+        cell.comment = c
 
     # Existing row highlights. DataFrame index 0 => Excel row 2.
     for issue in issues:
@@ -972,9 +1237,7 @@ def write_annotated_excel(
         f = fill_for(issue)
         for col in range(1, ws.max_column + 1):
             ws.cell(row=excel_row, column=col).fill = f
-        old = clean_text(ws.cell(row=excel_row, column=review_col).value)
-        note = context_prefix(issue) + issue.message
-        ws.cell(row=excel_row, column=review_col).value = (old + " | " if old else "") + note
+        annotate(excel_row, issue, context_prefix(issue))
 
     # Insert missing rows bottom-up so row indices remain stable.
     insert_issues = [i for i in issues if i.insert_after_row_index is not None]
@@ -986,16 +1249,46 @@ def write_annotated_excel(
         for col in range(1, ws.max_column + 1):
             ws.cell(row=insert_at, column=col).fill = fill_for(issue)
         ws.cell(row=insert_at, column=behavior_col).value = issue.missing_behavior or "MISSING"
-        ws.cell(row=insert_at, column=comment_col).value = issue.expected or issue.message
-        ws.cell(row=insert_at, column=review_col).value = context_prefix(issue) + issue.message
         ws.cell(row=insert_at, column=behavior_col).font = Font(bold=True)
+        # The Comment column is left untouched: the explanation belongs in
+        # Review_Notes only, so a missing item is reported once, not twice.
+        label = context_prefix(issue)
+        if not label:
+            missing_text = clean_text(issue.expected)
+            label = f'[Missing utterance: "{missing_text}"]' if missing_text else "[Missing utterance]"
+        annotate(insert_at, issue, label, with_note=(issue.kind != "missing_utterance"))
 
     # Basic readability.
     for col in range(1, ws.max_column + 1):
         letter = get_column_letter(col)
         ws.column_dimensions[letter].width = min(max(ws.column_dimensions[letter].width or 12, 14), 35)
     ws.column_dimensions[get_column_letter(comment_col)].width = 35
-    ws.column_dimensions[get_column_letter(review_col)].width = 45
+    ws.column_dimensions[get_column_letter(review_col)].width = 30
+
+    # Reviewer notes typed in the app. They are appended to the same Excel note
+    # as the program's own feedback, on the utterance's anchor row, so the
+    # student sees one note per row rather than two parallel sets of comments.
+    if reviewer_notes and student_utts:
+        for utt in student_utts:
+            text = clean_text(reviewer_notes.get(utt.uid))
+            if not text:
+                continue
+            excel_row = utt.anchor_row_index + 2
+            cell = ws.cell(row=excel_row, column=review_col)
+            if not clean_text(cell.value):
+                label = f'[Utt #{utt.uid}'
+                if utt.utterance_text:
+                    label += f': "{utt.utterance_text}"'
+                cell.value = label + "]"
+                for col in range(1, ws.max_column + 1):
+                    if not ws.cell(row=excel_row, column=col).fill.fill_type:
+                        ws.cell(row=excel_row, column=col).fill = fills["orange"]
+            previous = cell.comment.text if cell.comment else ""
+            body = (previous + "\n\n" if previous else "") + "Reviewer: " + text
+            c = CellComment(body, "Coding Checker")
+            c.width = 420
+            c.height = max(90, 26 * (body.count("\n") + 3))
+            cell.comment = c
 
     # Scores sheet (second tab), mirroring the lab's manual score sheet.
     if student_utts is not None and key_utts is not None and alignment is not None:
