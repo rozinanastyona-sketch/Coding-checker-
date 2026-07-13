@@ -65,10 +65,10 @@ categories:
   Number of Relevant Symbols:
     missing_mods: >-
       Number of Relevant Symbols - key: {key}, you coded: {found}. Put irrelevant symbols
-      in brackets, e.g. WASH [CORN] EGG.
+      in square brackets, e.g. WASH [CORN] EGG.
     extra_mods: >-
       Number of Relevant Symbols - key: {key}, you coded: {found}. Put irrelevant symbols
-      in brackets, e.g. WASH [CORN] EGG.
+      in square brackets, e.g. WASH [CORN] EGG.
 
   Word Order:
     # Deliberately minimal: a useful explanation depends on which symbols are in the

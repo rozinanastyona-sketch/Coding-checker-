@@ -32,7 +32,7 @@ ROOT = Path(__file__).parent
 GRAMMAR_PATH = ROOT / "grammar.yaml"
 REFERENCE_DIR = ROOT / "reference_keys"
 
-st.set_page_config(page_title="Coding Checker", layout="wide")
+st.set_page_config(page_title="Coding Checker", layout="wide", initial_sidebar_state="expanded")
 
 # ---------------------------------------------------------------------------
 # Visual theme — applies the reviewed mockup design over native Streamlit.
@@ -88,15 +88,22 @@ THEME_CSS = """
 .flagcard{background:var(--red-soft);border:1px solid #4a3226;border-radius:8px;
   padding:9px 12px;margin:6px 0;font-size:13px;line-height:1.4;color:var(--ink);}
 .flagcard .cat{color:var(--red);font-weight:700;}
-/* Hide Streamlit chrome for a standalone-product look */
+/* Hide Streamlit chrome for a standalone-product look.
+   NOTE: we hide only specific items (menu, deploy, badge, status) and NOT the
+   whole toolbar/header, so the sidebar open/close control keeps working. */
 #MainMenu{visibility:hidden;}
-[data-testid="stToolbar"]{display:none !important;}
 [data-testid="stStatusWidget"]{display:none !important;}
 [data-testid="stDecoration"]{display:none !important;}
 [data-testid="manage-app-button"]{display:none !important;}
 .stAppDeployButton{display:none !important;}
 footer{visibility:hidden; height:0;}
 [class*="viewerBadge"]{display:none !important;}
+/* Keep the sidebar open/close control always visible and clickable. */
+[data-testid="stSidebarCollapsedControl"],
+[data-testid="stSidebarCollapseButton"],
+[data-testid="collapsedControl"]{
+  display:flex !important; visibility:visible !important; opacity:1 !important;
+}
 </style>
 """
 st.markdown(THEME_CSS, unsafe_allow_html=True)
@@ -320,10 +327,9 @@ if page == "New Check":
             if only_issues and not utt_issues:
                 continue
 
-            light = "🟢" if not utt_issues else "🟤"
             badge = "matches key" if not utt_issues else f"{len(utt_issues)} issue(s)"
             text = utt.utterance_text or "no transcript"
-            title = f'{light}  Utterance {utt.uid:02d} — "{text}"  ·  {badge}'
+            title = f'Utterance {utt.uid:02d} — "{text}"  ·  {badge}'
             with st.expander(title, expanded=bool(utt_issues) and len(flagged) <= 3):
                 if utt_issues:
                     cards = ""
