@@ -153,6 +153,25 @@ other:
     The boundaries of this utterance could not be determined confidently. Please check it
     by hand.
 
+# Automatic reminders appended to a category's comment only when the utterance matches a
+# specific, mechanically-detectable pattern from the operational definitions. Everything
+# else in Word Order / Grammatical Intent is still left to the manual reviewer.
+reminders:
+  # Word Order: appended when the key utterance is exactly two symbols of the same part of
+  # speech (e.g. two nouns, two verbs, two adjectives) and the student's score differs.
+  word_order_two_same_pos: >-
+    This utterance is two symbols of the same part of speech. Per the operational
+    definitions: "If the child provides 2 nouns/pronouns, verbs, prepositions or adjectives
+    by themselves, score this as a 1." So the Word Order score here should be 1.0.
+  # Grammatical Intent: appended when the key utterance is a single-symbol utterance.
+  grammatical_intent_single_symbol: >-
+    This is a single-symbol utterance. Per the operational definitions, single symbol
+    utterances are coded as Grammatical Intent NOT clear / No Grammar.
+  # Grammatical Intent: appended to every Grammatical Intent comment.
+  grammatical_intent_context: >-
+    Remember: grammatical intent must be judged from context - the same utterance can have
+    clear grammatical intent in one instance and not clear in another, depending on the context.
+
 # Used when a category above has no template for the situation.
 fallback:
   wrong_value: "{category} - key: {key}, you coded: {found}."

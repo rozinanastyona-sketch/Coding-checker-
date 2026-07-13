@@ -578,10 +578,85 @@ def check_usv_rule(student_utt: Utterance, grammar: Dict[str, Any]) -> Optional[
     return None
 
 
+def _entry_for_group(grammar: Dict[str, Any], group_name: str) -> Optional[Dict[str, Any]]:
+    for e in grammar["sequence"]:
+        if e.get("group") == group_name:
+            return e
+    return None
+
+
+def _group_row(utt: Utterance, group_name: str, grammar: Dict[str, Any]):
+    entry = _entry_for_group(grammar, group_name)
+    return find_row_by_group(utt, entry, grammar) if entry else None
+
+
+def _num_symbols(utt: Utterance, grammar: Dict[str, Any]) -> Optional[int]:
+    """The coder's own Number of Symbols value for this utterance, as an int."""
+    row = _group_row(utt, "Number of Symbols", grammar)
+    if not row:
+        return None
+    for m in modifier_set(row):
+        try:
+            return int(float(m))
+        except ValueError:
+            continue
+    return None
+
+
+def utterance_pattern_flags(key_utt: Utterance, grammar: Dict[str, Any]) -> Tuple[bool, bool]:
+    """Detect the two operational-definition patterns that get an automatic reminder.
+
+    Returns (two_same_pos, single_symbol):
+      * two_same_pos - the utterance is exactly two symbols of the SAME part of speech,
+        by themselves (no bound morphemes, no bracketed/irrelevant symbols). Per the
+        operational definitions such utterances always score Word Order = 1.0.
+      * single_symbol - the coder's Number of Symbols is 1. Per the operational
+        definitions single-symbol utterances are Grammatical Intent NOT clear.
+    """
+    single_symbol = _num_symbols(key_utt, grammar) == 1
+
+    two_same_pos = False
+    text = (key_utt.utterance_text or "").replace("USV:", "").strip()
+    if "[" not in text and "]" not in text:
+        toks = text.split()
+        if len(toks) == 2 and not any(t.startswith("-") for t in toks):
+            pos_row = _group_row(key_utt, "Parts of Speech", grammar)
+            if pos_row and len(modifier_set(pos_row)) == 1:
+                two_same_pos = True
+    return two_same_pos, single_symbol
+
+
+def _reminder(grammar: Dict[str, Any], name: str) -> Optional[str]:
+    r = (grammar.get("feedback", {}).get("reminders", {}) or {}).get(name)
+    return " ".join(str(r).split()) if r else None
+
+
 def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict[str, Any]) -> List[Issue]:
     issues: List[Issue] = []
     red = grammar["colors"]["error"]
     purple = grammar["colors"]["boundary_unclear"]
+
+    # Operational-definition reminders for Word Order (two symbols of the same part of
+    # speech) and Grammatical Intent (single-symbol, plus an always-on context note).
+    two_same_pos, single_symbol = utterance_pattern_flags(key_utt, grammar)
+
+    def augment(msg: Optional[str], group: Optional[str]) -> Optional[str]:
+        if not msg:
+            return msg
+        extra: List[str] = []
+        if group == "Word Order" and two_same_pos:
+            r = _reminder(grammar, "word_order_two_same_pos")
+            if r:
+                extra.append(r)
+        if group == "Grammatical Intent":
+            if single_symbol:
+                r = _reminder(grammar, "grammatical_intent_single_symbol")
+                if r:
+                    extra.append(r)
+            r = _reminder(grammar, "grammatical_intent_context")
+            if r:
+                extra.append(r)
+        return (msg + " " + " ".join(extra)).strip() if extra else msg
 
     if student_utt.boundary_unclear:
         issues.append(Issue(
@@ -614,10 +689,10 @@ def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict
             issues.append(Issue(
                 kind="missing",
                 color=red,
-                message=render_feedback(
+                message=augment(render_feedback(
                     grammar, entry.get("group"), "missing_row",
                     utterance=utterance_text, key=key_desc,
-                ),
+                ), entry.get("group")),
                 insert_after_row_index=insert_after,
                 missing_behavior=key_row.behavior,
                 expected=expected,
@@ -634,7 +709,7 @@ def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict
             issues.append(Issue(
                 kind="wrong",
                 color=red,
-                message=msg,
+                message=augment(msg, entry.get("group")),
                 row_index=student_row.original_index,
                 utterance_id=student_utt.uid,
             ))
