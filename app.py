@@ -40,9 +40,11 @@ st.set_page_config(page_title="Coding Checker", layout="wide")
 THEME_CSS = """
 <style>
 :root{
-  --brand:#2f6df6; --brand-soft:#e9f0ff; --ink:#1c2733; --muted:#6b7b8c;
-  --line:#e3e8ee; --green:#1f9d55; --green-soft:#e6f6ec;
-  --red:#d64545; --red-soft:#fbe6e6; --amber:#c98a00;
+  --brand:#e2604a; --brand-soft:#3a2622; --brand-text:#f0a189;
+  --ink:#e8ebf1; --muted:#9aa4b5;
+  --line:#333a48; --card:#262a36; --page:#1b1e27;
+  --green:#7a9c54; --green-soft:#2b3324;
+  --red:#c17356; --red-soft:#33241d;
 }
 /* Card-like buttons */
 .stButton>button, .stDownloadButton>button{
@@ -50,55 +52,58 @@ THEME_CSS = """
   transition:.15s;
 }
 .stButton>button[kind="primary"], .stDownloadButton>button[kind="primary"]{
-  border:none;
+  border:none; background:var(--brand); color:#1b1013;
 }
 /* Metrics as cards */
 [data-testid="stMetric"]{
-  background:#fff; border:1px solid var(--line); border-radius:12px;
-  padding:14px 18px; box-shadow:0 1px 3px rgba(20,40,70,.06);
+  background:var(--card); border:1px solid var(--line); border-radius:12px;
+  padding:14px 18px;
 }
 [data-testid="stMetricValue"]{ font-weight:700; }
 /* Expanders as cards */
 [data-testid="stExpander"]{
   border:1px solid var(--line); border-radius:10px;
-  box-shadow:0 1px 2px rgba(20,40,70,.05); margin-bottom:8px; overflow:hidden;
+  background:var(--card); margin-bottom:8px; overflow:hidden;
 }
 [data-testid="stExpander"] summary{ font-weight:500; }
 /* Stepper */
 .stepper{display:flex;gap:6px;align-items:center;margin:2px 0 20px;flex-wrap:wrap;}
-.stp{display:flex;align-items:center;gap:8px;color:var(--muted);background:#eef1f5;
+.stp{display:flex;align-items:center;gap:8px;color:var(--muted);background:#2b3038;
   padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;}
-.stp .num{width:22px;height:22px;border-radius:50%;background:#dfe4ea;display:grid;
+.stp .num{width:22px;height:22px;border-radius:50%;background:#3a414d;display:grid;
   place-items:center;font-size:12px;}
-.stp.active{color:var(--brand);background:var(--brand-soft);}
-.stp.active .num{background:var(--brand);color:#fff;}
+.stp.active{color:var(--brand-text);background:var(--brand-soft);}
+.stp.active .num{background:var(--brand);color:#1b1013;}
 .stp.done{color:var(--green);background:var(--green-soft);}
-.stp.done .num{background:var(--green);color:#fff;}
-.stp .arw{color:#c3ccd6;font-size:15px;}
+.stp.done .num{background:var(--green);color:#1b1e13;}
+.stp .arw{color:#556074;font-size:15px;}
 /* Category bars */
 .catbar{display:grid;grid-template-columns:190px 1fr 34px;gap:12px;align-items:center;
   margin:8px 0;font-size:13px;}
-.catbar .track{height:9px;background:#eef1f5;border-radius:6px;overflow:hidden;}
+.catbar .track{height:9px;background:#2b3038;border-radius:6px;overflow:hidden;}
 .catbar .fill{height:100%;background:var(--red);border-radius:6px;}
 .catbar .fill.ok{background:var(--green);}
 .catbar .cat-n{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums;}
 /* Flag cards inside review */
-.flagcard{background:var(--red-soft);border:1px solid #f0c9c9;border-radius:8px;
-  padding:9px 12px;margin:6px 0;font-size:13px;line-height:1.4;}
+.flagcard{background:var(--red-soft);border:1px solid #4a3226;border-radius:8px;
+  padding:9px 12px;margin:6px 0;font-size:13px;line-height:1.4;color:var(--ink);}
 .flagcard .cat{color:var(--red);font-weight:700;}
-/* Export card */
-.exportcard{background:#f7f9fc;border:1px solid var(--line);border-radius:12px;
-  padding:26px;text-align:center;margin-bottom:6px;}
-.exportcard .ic{font-size:42px;}
-.exportcard .big{font-weight:600;font-size:16px;margin-top:6px;}
-.exportcard .sm{color:var(--muted);font-size:12px;margin-top:4px;}
+/* Hide Streamlit chrome for a standalone-product look */
+#MainMenu{visibility:hidden;}
+[data-testid="stToolbar"]{display:none !important;}
+[data-testid="stStatusWidget"]{display:none !important;}
+[data-testid="stDecoration"]{display:none !important;}
+[data-testid="manage-app-button"]{display:none !important;}
+.stAppDeployButton{display:none !important;}
+footer{visibility:hidden; height:0;}
+[class*="viewerBadge"]{display:none !important;}
 </style>
 """
 st.markdown(THEME_CSS, unsafe_allow_html=True)
 
 
 def render_stepper(step: int) -> None:
-    labels = ["Upload", "Summary", "Review", "Export"]
+    labels = ["Upload", "Summary", "Review"]
     html = '<div class="stepper">'
     for i, lab in enumerate(labels):
         cls = "stp" + (" active" if i == step else "") + (" done" if i < step else "")
@@ -315,7 +320,7 @@ if page == "New Check":
             if only_issues and not utt_issues:
                 continue
 
-            light = "🟢" if not utt_issues else "🔴"
+            light = "🟢" if not utt_issues else "🟤"
             badge = "matches key" if not utt_issues else f"{len(utt_issues)} issue(s)"
             text = utt.utterance_text or "no transcript"
             title = f'{light}  Utterance {utt.uid:02d} — "{text}"  ·  {badge}'
@@ -341,31 +346,16 @@ if page == "New Check":
                     height=80,
                 )
 
-        st.markdown("")
-        b1, b2 = st.columns([1, 1])
-        if b1.button("Finish & export  ›", type="primary"):
-            goto(3)
-        if b2.button("‹  Back to summary"):
-            goto(1)
-        st.stop()
+        st.markdown("---")
 
-    # ---------------------------------------------------------------- STEP 3
-    if step == 3:
-        st.title("Export")
-        st.caption("Scores sheet in the lab's format, plus your notes as Excel hover comments.")
-
+        # Build the annotated report on the fly so it always reflects the notes
+        # typed above, then offer it as a direct download — no separate step.
         student_path = Path(st.session_state["student_path"])
         out_path = Path(tempfile.gettempdir()) / f"{student_name}_checked.xlsx"
         write_annotated_excel(
             student_path, out_path, issues, grammar,
             student_utts=student_utts, key_utts=key_utts, alignment=alignment,
             reviewer_notes={k: v for k, v in st.session_state.get("notes", {}).items() if v and v.strip()},
-        )
-        st.markdown(
-            f'<div class="exportcard"><div class="ic">📊</div>'
-            f'<div class="big">{out_path.name} is ready</div>'
-            f'<div class="sm">Scores sheet · annotated coding · your review notes included</div></div>',
-            unsafe_allow_html=True,
         )
         with open(out_path, "rb") as f:
             st.download_button(
@@ -375,15 +365,18 @@ if page == "New Check":
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 type="primary",
             )
+        st.caption(
+            "Scores sheet plus your notes as Excel hover comments. "
+            "Totals and percentages are live Excel formulas — edit a cell and they recalculate."
+        )
 
-        st.markdown("")
-        b1, b2 = st.columns([1, 1])
-        if b1.button("Check next student  ›", type="primary"):
+        c1, c2 = st.columns([1, 1])
+        if c1.button("Check next student  ›"):
             for k in ("results", "notes", "uploaded_name", "student_path"):
                 st.session_state.pop(k, None)
             goto(0)
-        if b2.button("‹  Back to review"):
-            goto(2)
+        if c2.button("‹  Back to summary"):
+            goto(1)
         st.stop()
 
 

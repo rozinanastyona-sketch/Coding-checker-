@@ -1092,15 +1092,23 @@ def write_scores_sheet(wb, scores_rows: List[Dict[str, Any]]) -> None:
 
     n = len(scores_rows)
     if n:
+        # Data cells live in rows 2..(n+1). The Total and Percentage rows below
+        # use live Excel formulas (SUM / AVERAGE) rather than baked-in numbers,
+        # so if a reviewer edits any 1/0 cell by hand in Excel the totals and
+        # percentages recalculate automatically.
+        first_data_row = 2
+        last_data_row = n + 1
         total_row = n + 3
         pct_row = n + 4
         ws.cell(row=total_row, column=3, value="Total").font = Font(bold=True)
         ws.cell(row=pct_row, column=3, value="Percentage").font = Font(bold=True)
         for col_offset, (_, label) in enumerate(SCORES_COLUMN_ORDER):
             col = 4 + col_offset
-            total = sum(r[label] for r in scores_rows)
-            ws.cell(row=total_row, column=col, value=total).font = Font(bold=True)
-            pct_cell = ws.cell(row=pct_row, column=col, value=total / n)
+            letter = get_column_letter(col)
+            data_range = f"{letter}{first_data_row}:{letter}{last_data_row}"
+            total_cell = ws.cell(row=total_row, column=col, value=f"=SUM({data_range})")
+            total_cell.font = Font(bold=True)
+            pct_cell = ws.cell(row=pct_row, column=col, value=f"=AVERAGE({data_range})")
             pct_cell.number_format = "0.0%"
             pct_cell.font = Font(bold=True)
 
