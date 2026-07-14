@@ -31,6 +31,7 @@ from checker_engine import (
 ROOT = Path(__file__).parent
 GRAMMAR_PATH = ROOT / "grammar.yaml"
 REFERENCE_DIR = ROOT / "reference_keys"
+TRAINING_PATH = ROOT / "training_items.yaml"
 
 st.set_page_config(page_title="Coding Checker", layout="wide", initial_sidebar_state="expanded")
 
@@ -122,38 +123,152 @@ def render_stepper(step: int) -> None:
     st.markdown(html, unsafe_allow_html=True)
 
 
+# ---------------------------------------------------------------------------
+# Training mode
+# ---------------------------------------------------------------------------
+import re as _re
+import yaml as _yaml
+
+
+@st.cache_data(show_spinner=False)
+def load_training_items():
+    if not TRAINING_PATH.exists():
+        return {"video_themes": {}, "sv_columns": [], "items": []}
+    with open(TRAINING_PATH, encoding="utf-8") as f:
+        return _yaml.safe_load(f) or {}
+
+
+# Item-bank category -> the Scores-sheet label used to count that category's errors.
+TRAINABLE = {
+    "Listing": "Listing",
+    "Word Order": "Word order",
+    "SV": "SV",
+    "Parts of Speech": "Parts of speech",
+    "Inflectional Morphemes": "Inflectional morph",
+    "Grammatical Intent": "Grammatical Intent",
+}
+POS_OPTIONS = ["Noun", "Pronoun", "Verb", "Preposition", "Adjective", "Determiner", "Conjunction", "Absent"]
+ITEM_OPTIONS = {
+    "Listing": ["Listing Present", "Listing Not Present"],
+    "Word Order": ["1.0", "0.5", "0"],
+    "Grammatical Intent": ["Grammatical Intent Clear", "Grammatical Intent NOT Clear"],
+    "Inflectional Morphemes": ["At least one inflectional morpheme", "No appropriate inflectional morphemes"],
+}
+
+
+def _grade_item(item, given):
+    """Return (all_correct, detail_markdown)."""
+    cat = item["category"]
+    ans = item["answer"]
+    if cat == "SV":
+        lines = []
+        all_ok = True
+        for col, correct_v in ans.items():
+            g = str(given.get(col, "")).strip()
+            cv = str(correct_v).strip()
+            if col == "USV":
+                ok = g.upper() == cv.upper() or (g.upper() in ("", "NO") and cv.upper() == "NO")
+            else:
+                ok = g.upper() == cv.upper()
+            all_ok = all_ok and ok
+            mark = "✓" if ok else "✗"
+            lines.append(f'- {col}: you coded "{g or "-"}" · key "{cv}"  {mark}')
+        return all_ok, "\n".join(lines)
+    if cat == "Parts of Speech":
+        want = {"Absent"} if ans == "Absent" else {x.strip() for x in ans.split(",")}
+        got = set(given)
+        return got == want, f'Key: {", ".join(sorted(want))}'
+    return str(given).strip() == str(ans).strip(), f"Key: {ans}"
+
+
+def render_training_item(item, seq):
+    """One interactive practice item: input widgets, a Check button, then feedback."""
+    cat = item["category"]
+    key = f'ti_{item["video"]}_{cat}_{item["n"]}'
+    with st.container(border=True):
+        st.markdown(f'**{seq}.**  "{item["utterance"]}"')
+        if cat == "SV":
+            sv_cols = load_training_items().get("sv_columns", [])
+            given = {}
+            cols = st.columns(2)
+            for i, colname in enumerate(sv_cols):
+                with cols[i % 2]:
+                    if colname == "USV":
+                        given[colname] = st.text_input(
+                            "USV (type the subject+verb, or NO)", key=key + "_USV"
+                        )
+                    else:
+                        given[colname] = st.radio(
+                            colname, ["YES", "NO"], key=key + "_" + colname, horizontal=True
+                        )
+        elif cat == "Parts of Speech":
+            given = st.multiselect("Parts of speech present", POS_OPTIONS, key=key + "_ms")
+        else:
+            given = st.radio("Your answer", ITEM_OPTIONS[cat], key=key + "_r", index=None)
+
+        if st.button("Check answer", key=key + "_btn"):
+            st.session_state[key + "_done"] = True
+
+        if st.session_state.get(key + "_done"):
+            correct, detail = _grade_item(item, given)
+            if correct:
+                st.success("Correct.")
+            else:
+                st.error("Not quite — compare with the key below.")
+            if detail:
+                st.markdown(detail)
+            st.info(f'**Why:** {item["rationale"]}\n\n_Operational Definitions: {item["ref"]}_')
+
+
+def _flag_html(issues_list):
+    cards = ""
+    for i in issues_list:
+        cat = CATEGORY_OF_KIND.get(i.kind)
+        prefix = f'<span class="cat">{cat}</span> — ' if cat else ""
+        cards += f'<div class="flagcard">{prefix}{i.message}</div>'
+    return cards
+
+
 def password_ok() -> bool:
-    """Ask for a password only if one is configured.
+    """Two-level access. Passwords come only from st.secrets, never hard-coded:
 
-    Set it in .streamlit/secrets.toml locally, or in the host's Secrets panel:
+        teacher_password = "..."   (full access; falls back to legacy 'password')
+        student_password = "..."   (Training page only)
 
-        password = "your-password-here"
-
-    With no password configured the app behaves exactly as before, so local use
-    stays frictionless.
+    On success the role is stored in st.session_state['role'] = 'teacher' | 'student'.
+    With no passwords configured the app opens as teacher, so local use stays frictionless.
     """
     try:
-        expected = st.secrets.get("password")
+        teacher_pw = st.secrets.get("teacher_password") or st.secrets.get("password")
+        student_pw = st.secrets.get("student_password")
     except Exception:
-        expected = None
-    if not expected:
+        teacher_pw = student_pw = None
+
+    if not teacher_pw and not student_pw:
+        st.session_state["role"] = "teacher"
         return True
-    if st.session_state.get("authenticated"):
+    if st.session_state.get("role"):
         return True
 
     st.title("Coding Checker")
-    st.caption("This tool contains answer keys. Please enter the lab password.")
+    st.caption("Please enter your password.")
     entered = st.text_input("Password", type="password")
     if entered:
-        if entered == expected:
-            st.session_state["authenticated"] = True
+        if teacher_pw and entered == teacher_pw:
+            st.session_state["role"] = "teacher"
             st.rerun()
-        st.error("Incorrect password.")
+        elif student_pw and entered == student_pw:
+            st.session_state["role"] = "student"
+            st.rerun()
+        else:
+            st.error("Incorrect password.")
     return False
 
 
 if not password_ok():
     st.stop()
+
+ROLE = st.session_state.get("role", "teacher")
 
 grammar = load_grammar(GRAMMAR_PATH)
 REFERENCE_DIR.mkdir(exist_ok=True)
@@ -169,7 +284,15 @@ CATEGORY_OF_KIND = {
 }
 
 st.sidebar.title("Coding Checker")
-page = st.sidebar.radio("Menu", ["New Check", "Key Library"], label_visibility="collapsed")
+if ROLE == "teacher":
+    page = st.sidebar.radio(
+        "Menu", ["New Check", "Key Library", "Training", "Item Bank"], label_visibility="collapsed"
+    )
+else:
+    # Students only ever see the Training page. No keys, no key library, no item bank.
+    page = "Training"
+    st.sidebar.markdown("### Training")
+    st.sidebar.caption("Practice mode")
 st.sidebar.markdown("---")
 st.sidebar.caption("Developed for research and coder training in AAC lab.")
 
@@ -422,3 +545,152 @@ elif page == "Key Library":
             )
             st.success("Added.")
             st.rerun()
+
+
+elif page == "Training":
+    ti = load_training_items()
+    themes = ti.get("video_themes", {})
+    st.title("Training")
+
+    # ---------------------------------------------------------- TEACHER MODE
+    if ROLE == "teacher":
+        st.caption("Practice any video and category, independent of any student's errors.")
+        vnum = st.selectbox(
+            "Video", [1, 2, 3, 4],
+            format_func=lambda v: f"Video {v} — {themes.get(str(v), '')}",
+        )
+        cat = st.selectbox("Category", list(TRAINABLE.keys()))
+        items = [x for x in ti["items"] if x["video"] == vnum and x["category"] == cat]
+        st.markdown(f"##### {cat} — {len(items)} items")
+        for i, item in enumerate(items, 1):
+            render_training_item(item, i)
+        st.stop()
+
+    # ---------------------------------------------------------- STUDENT MODE
+    st.caption("Upload your Observer XT export. You'll see your scores and get practice on your weakest areas.")
+    uploaded = st.file_uploader("Upload your Observer export (.xlsx)", type=["xlsx"])
+    if uploaded is None:
+        st.info("Upload your file to begin.")
+        st.stop()
+
+    if st.session_state.get("tr_name") != uploaded.name:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+            tmp.write(uploaded.getbuffer())
+        st.session_state["tr_name"] = uploaded.name
+        st.session_state["tr_path"] = tmp.name
+
+    student_df = pd.read_excel(st.session_state["tr_path"])
+    passports = load_reference_passports(REFERENCE_DIR)
+    _first, suggestions = suggest_references(student_df, grammar, REFERENCE_DIR, top_k=5)
+    ordered = suggestions or passports
+    if not ordered:
+        st.error("Could not match your file to a training video. Check with your instructor.")
+        st.stop()
+
+    selected = ordered[0]
+    m = _re.search(r"(\d+)", selected.get("file_name", ""))
+    vnum = int(m.group(1)) if m else None
+    st.markdown(f"**Video:** {themes.get(str(vnum), 'unknown')}")
+
+    # Hooks into the existing engine: same comparison, scoring and error counting
+    # used by the teacher's New Check — students just never see the key itself.
+    key_df = read_excel_first_sheet_or_named(
+        REFERENCE_DIR / selected["file_name"], sheet_name=selected.get("sheet_name")
+    )
+    issues, su, ku, al = compare_files_with_alignment(student_df, key_df, grammar)
+    scores_rows = build_scores_rows(su, ku, al, issues, grammar)
+    category_cols = [label for _, label in ce.SCORES_COLUMN_ORDER]
+    scores_df = pd.DataFrame(scores_rows)
+    total_cells = len(scores_rows) * len(category_cols)
+    matched = int(scores_df[category_cols].values.sum()) if scores_rows else 0
+    match_pct = matched / total_cells if total_cells else 0
+
+    issues_by_utt = {}
+    for i in issues:
+        if i.utterance_id is not None:
+            issues_by_utt.setdefault(i.utterance_id, []).append(i)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Utterances", len(su))
+    c2.metric("With issues", len(issues_by_utt))
+    c3.metric("Agreement", f"{match_pct:.0%}")
+
+    cat_errors = (
+        {bank: int((scores_df[label] == 0).sum()) for bank, label in TRAINABLE.items()}
+        if scores_rows else {b: 0 for b in TRAINABLE}
+    )
+    max_err = max(cat_errors.values()) if cat_errors and max(cat_errors.values()) else 1
+    st.markdown("##### Your errors by category")
+    bars = ""
+    for bank in TRAINABLE:
+        n = cat_errors.get(bank, 0)
+        width = int(n / max_err * 100) if n else 100
+        klass = "fill" if n else "fill ok"
+        bars += (
+            f'<div class="catbar"><span>{bank}</span>'
+            f'<div class="track"><div class="{klass}" style="width:{width}%"></div></div>'
+            f'<span class="cat-n">{n}</span></div>'
+        )
+    st.markdown(bars, unsafe_allow_html=True)
+
+    with st.expander("Your flagged utterances and feedback"):
+        any_flag = False
+        for utt in su:
+            ui = issues_by_utt.get(utt.uid, [])
+            if not ui:
+                continue
+            any_flag = True
+            st.markdown(f'**"{utt.utterance_text or "no transcript"}"**')
+            st.markdown(_flag_html(ui), unsafe_allow_html=True)
+        if not any_flag:
+            st.write("No issues flagged.")
+
+    st.markdown("##### Practice your top areas")
+    ranked = [b for b, _ in sorted(cat_errors.items(), key=lambda kv: kv[1], reverse=True)
+              if cat_errors[b] > 0][:3]
+    if not ranked:
+        st.success("No errors in the trainable categories — nothing to practice. Great work!")
+        st.stop()
+
+    tabs = st.tabs([f"{b} ({cat_errors[b]})" for b in ranked])
+    for tab, bank in zip(tabs, ranked):
+        with tab:
+            items = [x for x in ti["items"] if x["video"] == vnum and x["category"] == bank]
+            if not items:
+                st.info("No practice items for this category and video yet.")
+            for i, item in enumerate(items, 1):
+                render_training_item(item, i)
+
+
+elif page == "Item Bank":
+    ti = load_training_items()
+    themes = ti.get("video_themes", {})
+    st.title("Item Bank")
+    st.caption("All training items (teacher view). Students never see this page.")
+
+    rows = []
+    for x in ti["items"]:
+        ans = x["answer"]
+        if isinstance(ans, dict):
+            ans = " | ".join(f"{k}={v}" for k, v in ans.items())
+        rows.append({
+            "Video": f'{x["video"]} — {themes.get(str(x["video"]), "")}',
+            "Category": x["category"],
+            "#": x["n"],
+            "Utterance": x["utterance"],
+            "Answer": ans,
+            "Rationale": x["rationale"],
+            "Ref": x["ref"],
+        })
+    df = pd.DataFrame(rows)
+
+    fcol1, fcol2 = st.columns(2)
+    fv = fcol1.multiselect("Filter by video", sorted(df["Video"].unique()))
+    fc = fcol2.multiselect("Filter by category", list(TRAINABLE.keys()))
+    view = df
+    if fv:
+        view = view[view["Video"].isin(fv)]
+    if fc:
+        view = view[view["Category"].isin(fc)]
+    st.caption(f"{len(view)} of {len(df)} items")
+    st.dataframe(view, use_container_width=True, hide_index=True)

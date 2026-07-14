@@ -1,0 +1,867 @@
+# Training item bank - generated from training_items_REVIEW.xlsx.
+# 100 items: 4 videos x (Listing 4, Word Order 4, SV 5, Parts of Speech 4,
+# Inflectional Morphemes 4, Grammatical Intent 4). Edit wording freely.
+video_themes:
+  '1': PR Farm
+  '2': PR Shopping
+  '3': PR Birthday Party
+  '4': PR Vet
+sv_columns:
+- SV Present
+- Lexical Verb
+- Non-lexical Verb
+- Subject-Verb Agreement
+- USV
+- Repeated SV
+items:
+- video: 1
+  category: Listing
+  n: 1
+  utterance: HIPPO DOG HORSE
+  rationale: A simple list of nouns with no other part of speech.
+  ref: Listing / Examples
+  answer: Listing Present
+- video: 1
+  category: Listing
+  n: 2
+  utterance: I WASH CORN EGG
+  rationale: Contains a subject (I) and a verb (WASH), so it is not a simple list and receives the full
+    set of codes.
+  ref: Listing / "If the list contains a subject and verb..."
+  answer: Listing Not Present
+- video: 1
+  category: Listing
+  n: 3
+  utterance: EAT WASH HIDE
+  rationale: A simple list of verbs. Lists may be nouns, verbs, or both.
+  ref: Listing / Examples
+  answer: Listing Present
+- video: 1
+  category: Listing
+  n: 4
+  utterance: DIRTY CORN
+  rationale: Two different parts of speech (adjective + noun). More than one part of speech disqualifies
+    it as a simple list.
+  ref: Listing / "...or it contains more than one part of speech"
+  answer: Listing Not Present
+- video: 1
+  category: Word Order
+  n: 1
+  utterance: I WASH CORN
+  rationale: Complete and accurate S-V-O order.
+  ref: Word Order Score / General rules
+  answer: '1.0'
+- video: 1
+  category: Word Order
+  n: 2
+  utterance: CORN EAT HORSE
+  rationale: The object is first and the subject last. No part of the order is accurate, so it cannot
+    be scored 0.5.
+  ref: Word Order Score / General rules
+  answer: '0'
+- video: 1
+  category: Word Order
+  n: 3
+  utterance: HORSE WASH -ING TRACTOR THE
+  rationale: Subject-verb-object is accurate, but the determiner is stranded at the end. Accurate in part,
+    inaccurate in part.
+  ref: Word Order Score / General rules
+  answer: '0.5'
+- video: 1
+  category: Word Order
+  n: 4
+  utterance: -S
+  rationale: Single-symbol utterances score 1.0 EXCEPT bound morphemes used alone, which score 0.
+  ref: Word Order Score / Single symbol utterances
+  answer: '0'
+- video: 1
+  category: SV
+  n: 1
+  utterance: DOG IS EAT -ING CORN
+  rationale: IS is an auxiliary here, so it is a non-lexical verb AND there is a lexical main verb (EAT).
+    Singular DOG + IS agree. USV = subject + lexical verb only; ignore the rest.
+  ref: SV / Lexical vs Non-lexical; USV coding; SV Agreement
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'YES'
+    USV: DOG EAT
+    Repeated SV: 'NO'
+- video: 1
+  category: SV
+  n: 2
+  utterance: HORSE ARE DIRTY
+  rationale: ARE is the MAIN verb here, so it is non-lexical and there is no lexical verb. Singular HORSE
+    + ARE do not agree. Because there is no lexical verb, do NOT code a USV - this is the step students
+    most often get wrong.
+  ref: SV / "If the utterance is coded as non-lexical verb, do not code USV"
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'NO'
+    Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'NO'
+- video: 1
+  category: SV
+  n: 3
+  utterance: CORN IN BIG BARN
+  rationale: No verb of any kind, therefore no subject-verb structure. Everything downstream is NO.
+  ref: SV / Sentence Present
+  answer:
+    SV Present: 'NO'
+    Lexical Verb: 'NO'
+    Non-lexical Verb: 'NO'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'NO'
+- video: 1
+  category: SV
+  n: 4
+  utterance: DOG WASH TRACTOR
+  rationale: Lexical verb with no 'to be' verb. Subject-Verb Agreement is only coded when IS/AM/ARE is
+    present, so it is NO here - not because the utterance disagrees, but because the code does not apply.
+  ref: SV Agreement / "Only use this code for utterances that contain at least one 'to be' verb"
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'NO'
+    Subject-Verb Agreement: 'NO'
+    USV: DOG WASH
+    Repeated SV: 'NO'
+- video: 1
+  category: SV
+  n: 5
+  utterance: DOG WASH EGG
+  rationale: The core subject-verb combination DOG WASH already occurred above. Changing the object does
+    not make it a new USV. By definition this is a Repeated SV combination, and repeated SVs are not coded
+    as USVs.
+  ref: SV / USV coding - "DOG WASH CAR / DOG WASH AIRPLANE = Repeated SV"
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'NO'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'YES'
+- video: 1
+  category: Parts of Speech
+  n: 1
+  utterance: DOG EAT CORN
+  rationale: DOG and CORN are both nouns, but Noun is selected only once per utterance.
+  ref: Parts of Speech / "Only select a part of speech once per utterance"
+  answer: Noun, Verb
+- video: 1
+  category: Parts of Speech
+  n: 2
+  utterance: THE HIPPO -S IN BARN
+  rationale: The -S here is a contracted copula, which counts as a Verb even though no verb symbol was
+    selected.
+  ref: Parts of Speech / Example "THE HIPPO -S IN BATHTUB"
+  answer: Determiner, Noun, Verb, Preposition
+- video: 1
+  category: Parts of Speech
+  n: 3
+  utterance: I AM DIRTY
+  rationale: AM is the main verb. A non-lexical verb is still a Verb for the purposes of this code.
+  ref: Parts of Speech / Codes
+  answer: Pronoun, Verb, Adjective
+- video: 1
+  category: Parts of Speech
+  n: 4
+  utterance: -S -ING
+  rationale: The utterance consists only of bound morphemes, so no parts of speech are present. This is
+    the only case where Parts of Speech is Absent.
+  ref: Parts of Speech / Absent
+  answer: Absent
+- video: 1
+  category: Inflectional Morphemes
+  n: 1
+  utterance: HORSE EAT -ING CORN
+  rationale: -ING is attached to a lexical verb (EAT), so it is used correctly.
+  ref: Inflectional Morphemes / Correct use
+  answer: At least one inflectional morpheme
+- video: 1
+  category: Inflectional Morphemes
+  n: 2
+  utterance: -S BARN DOG
+  rationale: -S is fronted with nothing to attach to. Compare the definition's example "-S HIPPO BOX".
+  ref: Inflectional Morphemes / Incorrect use
+  answer: No appropriate inflectional morphemes
+- video: 1
+  category: Inflectional Morphemes
+  n: 3
+  utterance: DOG -S EGG
+  rationale: -S is correctly attached to a noun (plural or possessive). Compare "DOG -S AIRPLANE".
+  ref: Inflectional Morphemes / Correct use
+  answer: At least one inflectional morpheme
+- video: 1
+  category: Inflectional Morphemes
+  n: 4
+  utterance: HIPPO -ING BARN
+  rationale: -ING requires a lexical verb. There is none, so it is used incorrectly. Compare "DOG -ING
+    CAR".
+  ref: Inflectional Morphemes / Incorrect use
+  answer: No appropriate inflectional morphemes
+- video: 1
+  category: Grammatical Intent
+  n: 1
+  utterance: DOG EAT CORN
+  rationale: A stripped-down childlike sentence can still be perfectly clear.
+  ref: Grammatical Intent / Examples
+  answer: Grammatical Intent Clear
+- video: 1
+  category: Grammatical Intent
+  n: 2
+  utterance: CORN BIG
+  rationale: This could mean CORN IS BIG or BIG CORN. Two different grammatical propositions, so intent
+    is not clear.
+  ref: Grammatical Intent / "DOG BIG" example
+  answer: Grammatical Intent NOT Clear
+- video: 1
+  category: Grammatical Intent
+  n: 3
+  utterance: EAT WASH HIDE
+  rationale: A listing of parts of speech is always coded as NOT clear.
+  ref: Grammatical Intent / "Code as NOT clear if... Listing of parts of speech"
+  answer: Grammatical Intent NOT Clear
+- video: 1
+  category: Grammatical Intent
+  n: 4
+  utterance: I DRIVE TRACTOR BIG
+  rationale: Word order here is only 0.5 (BIG is stranded), but subject and verb are in the correct order
+    and the proposition is recoverable. An utterance can score 0.5 on word order and still be Clear.
+  ref: Grammatical Intent / "Word order and grammatical intent"
+  answer: Grammatical Intent Clear
+- video: 2
+  category: Listing
+  n: 1
+  utterance: MILK PIZZA CHICKEN BANANA
+  rationale: A simple list of nouns.
+  ref: Listing / Examples
+  answer: Listing Present
+- video: 2
+  category: Listing
+  n: 2
+  utterance: I BUY PIZZA BASKET
+  rationale: Subject (I) and verb (BUY) are present, so this is fully analyzed rather than treated as
+    a list.
+  ref: Listing / "If the list contains a subject and verb..."
+  answer: Listing Not Present
+- video: 2
+  category: Listing
+  n: 3
+  utterance: BUY GIVE PUT
+  rationale: A simple list of verbs.
+  ref: Listing / Examples
+  answer: Listing Present
+- video: 2
+  category: Listing
+  n: 4
+  utterance: BIG BASKET
+  rationale: Adjective + noun = more than one part of speech, so not a simple list.
+  ref: Listing / "...or it contains more than one part of speech"
+  answer: Listing Not Present
+- video: 2
+  category: Word Order
+  n: 1
+  utterance: I BUY PIZZA
+  rationale: Accurate S-V-O throughout.
+  ref: Word Order Score / General rules
+  answer: '1.0'
+- video: 2
+  category: Word Order
+  n: 2
+  utterance: PIZZA BUY I
+  rationale: Fully reversed. No part of the order is accurate.
+  ref: Word Order Score / General rules
+  answer: '0'
+- video: 2
+  category: Word Order
+  n: 3
+  utterance: YOU GIVE MONEY THE
+  rationale: S-V-O is accurate but the determiner is stranded, so it cannot be a 1.0.
+  ref: Word Order Score / General rules
+  answer: '0.5'
+- video: 2
+  category: Word Order
+  n: 4
+  utterance: BASKET
+  rationale: Single-symbol utterances are scored 1.0 (the only exception is a bound morpheme used alone).
+  ref: Word Order Score / Single symbol utterances
+  answer: '1.0'
+- video: 2
+  category: SV
+  n: 1
+  utterance: I AM BUY -ING PIZZA
+  rationale: AM is auxiliary (non-lexical), BUY is the lexical main verb. I + AM agree. USV ignores everything
+    but subject and lexical verb.
+  ref: SV / Lexical vs Non-lexical; USV coding
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'YES'
+    USV: I BUY
+    Repeated SV: 'NO'
+- video: 2
+  category: SV
+  n: 2
+  utterance: YOU IS HAPPY
+  rationale: IS is the main verb and is non-lexical. YOU + IS do not agree. No lexical verb means no USV.
+  ref: SV Agreement / Examples ("YOU IS LITTLE"); USV coding
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'NO'
+    Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'NO'
+- video: 2
+  category: SV
+  n: 3
+  utterance: MONEY IN REGISTER
+  rationale: No verb at all, so no sentence. All downstream columns are NO.
+  ref: SV / Sentence Present
+  answer:
+    SV Present: 'NO'
+    Lexical Verb: 'NO'
+    Non-lexical Verb: 'NO'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'NO'
+- video: 2
+  category: SV
+  n: 4
+  utterance: HORSE -S PUSH BASKET
+  rationale: The -S can be a contracted copula, which counts as a non-lexical verb (compare "PIG -'S WASH
+    IN BATHTUB"). But Agreement is NOT coded, because the code applies only when the SYMBOL IS, AM, or
+    ARE is present - a contracted copula does not trigger it.
+  ref: SV / USV coding; SV Agreement / "Only... utterances that contain at least one 'to be' verb"
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'NO'
+    USV: HORSE PUSH
+    Repeated SV: 'NO'
+- video: 2
+  category: SV
+  n: 5
+  utterance: I BUY CHICKEN
+  rationale: I BUY already occurred in the first row. A different object does not make a new USV.
+  ref: SV / USV coding - repeated SV combination
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'NO'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'YES'
+- video: 2
+  category: Parts of Speech
+  n: 1
+  utterance: I BUY PIZZA
+  rationale: Straightforward pronoun + verb + noun.
+  ref: Parts of Speech / Codes
+  answer: Pronoun, Verb, Noun
+- video: 2
+  category: Parts of Speech
+  n: 2
+  utterance: HORSE IN THE BIG BASKET
+  rationale: No verb of any kind is present here - do not add Verb by reflex.
+  ref: Parts of Speech / Codes
+  answer: Noun, Preposition, Determiner, Adjective
+- video: 2
+  category: Parts of Speech
+  n: 3
+  utterance: YOU ARE SAD
+  rationale: ARE is the main verb; non-lexical verbs still count as Verb.
+  ref: Parts of Speech / Codes
+  answer: Pronoun, Verb, Adjective
+- video: 2
+  category: Parts of Speech
+  n: 4
+  utterance: DUCK -S PUSH BASKET AND GRAPE
+  rationale: Both the contracted copula -S and the lexical verb PUSH are verbs, but Verb is selected only
+    once. DUCK, BASKET and GRAPE are all nouns - Noun is likewise selected once.
+  ref: Parts of Speech / "Only select a part of speech once per utterance"
+  answer: Noun, Verb, Conjunction
+- video: 2
+  category: Inflectional Morphemes
+  n: 1
+  utterance: I BUY -ING GRAPE -S
+  rationale: Both morphemes are used correctly, but the code is applied only once per utterance.
+  ref: Inflectional Morphemes / "used once per utterance regardless of the number"
+  answer: At least one inflectional morpheme
+- video: 2
+  category: Inflectional Morphemes
+  n: 2
+  utterance: -S MONEY
+  rationale: -S is fronted with nothing to attach to.
+  ref: Inflectional Morphemes / Incorrect use
+  answer: No appropriate inflectional morphemes
+- video: 2
+  category: Inflectional Morphemes
+  n: 3
+  utterance: HORSE PUSH -ING BASKET
+  rationale: -ING is attached to a lexical verb, so it is appropriate.
+  ref: Inflectional Morphemes / Correct use
+  answer: At least one inflectional morpheme
+- video: 2
+  category: Inflectional Morphemes
+  n: 4
+  utterance: PIZZA -ING BASKET
+  rationale: -ING requires a lexical verb; there is none.
+  ref: Inflectional Morphemes / Incorrect use
+  answer: No appropriate inflectional morphemes
+- video: 2
+  category: Grammatical Intent
+  n: 1
+  utterance: YOU GIVE MONEY
+  rationale: Stripped down but grammatically unambiguous.
+  ref: Grammatical Intent / Examples
+  answer: Grammatical Intent Clear
+- video: 2
+  category: Grammatical Intent
+  n: 2
+  utterance: BASKET BLUE
+  rationale: Could be BASKET IS BLUE or BLUE BASKET - two different propositions.
+  ref: Grammatical Intent / "DOG BIG" example
+  answer: Grammatical Intent NOT Clear
+- video: 2
+  category: Grammatical Intent
+  n: 3
+  utterance: PIZZA MILK CHICKEN
+  rationale: A listing of parts of speech is always NOT clear.
+  ref: Grammatical Intent / Code as NOT clear if...
+  answer: Grammatical Intent NOT Clear
+- video: 2
+  category: Grammatical Intent
+  n: 4
+  utterance: I PUT CHICKEN BASKET
+  rationale: The preposition is missing, but the proposition is fully recoverable. Missing grammatical
+    elements do not by themselves make intent unclear.
+  ref: Grammatical Intent / "The utterance can be a stripped-down utterance and still be clear"
+  answer: Grammatical Intent Clear
+- video: 3
+  category: Listing
+  n: 1
+  utterance: CAKE JUICE CUP
+  rationale: A simple list of nouns.
+  ref: Listing / Examples
+  answer: Listing Present
+- video: 3
+  category: Listing
+  n: 2
+  utterance: I WANT CAKE JUICE
+  rationale: Subject + verb present. Compare the definition's example "I WANT HIPPO DOG HORSE".
+  ref: Listing / "If the list contains a subject and verb..."
+  answer: Listing Not Present
+- video: 3
+  category: Listing
+  n: 3
+  utterance: EAT DRINK SING
+  rationale: A simple list of verbs.
+  ref: Listing / Examples
+  answer: Listing Present
+- video: 3
+  category: Listing
+  n: 4
+  utterance: BLUE CUP
+  rationale: Adjective + noun = more than one part of speech.
+  ref: Listing / "...or it contains more than one part of speech"
+  answer: Listing Not Present
+- video: 3
+  category: Word Order
+  n: 1
+  utterance: DOG EAT CAKE
+  rationale: Accurate throughout.
+  ref: Word Order Score / General rules
+  answer: '1.0'
+- video: 3
+  category: Word Order
+  n: 2
+  utterance: CAKE DOG EAT
+  rationale: The object is fronted and the verb is final. No part of the order is accurate.
+  ref: Word Order Score / General rules
+  answer: '0'
+- video: 3
+  category: Word Order
+  n: 3
+  utterance: DOG EAT CAKE BIG
+  rationale: S-V-O is correct but the adjective is stranded after the noun. Directly parallel to the definition's
+    "MONKEY WASH AIRPLANE BIG".
+  ref: Word Order Score / Video Probe Data Example
+  answer: '0.5'
+- video: 3
+  category: Word Order
+  n: 4
+  utterance: CUP
+  rationale: Single-symbol utterance. Scored 1.0 because it is a real symbol, not a bound morpheme.
+  ref: Word Order Score / Single symbol utterances
+  answer: '1.0'
+- video: 3
+  category: SV
+  n: 1
+  utterance: I AM DRINK -ING JUICE
+  rationale: AM is auxiliary, DRINK is the lexical main verb, I + AM agree. Note the USV drops the -ING.
+  ref: SV / USV coding ("MONKEY IS WASHING CAR -> MONKEY WASH")
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'YES'
+    USV: I DRINK
+    Repeated SV: 'NO'
+- video: 3
+  category: SV
+  n: 2
+  utterance: DOG ARE HAPPY
+  rationale: ARE is the main verb (non-lexical). Singular DOG + ARE do not agree. No lexical verb, so
+    no USV.
+  ref: SV Agreement / Examples ("DOG ARE"); USV coding
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'NO'
+    Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'NO'
+- video: 3
+  category: SV
+  n: 3
+  utterance: CAKE ON BIG PLATE
+  rationale: No verb, no sentence.
+  ref: SV / Sentence Present
+  answer:
+    SV Present: 'NO'
+    Lexical Verb: 'NO'
+    Non-lexical Verb: 'NO'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'NO'
+- video: 3
+  category: SV
+  n: 4
+  utterance: HORSE SING
+  rationale: A bare subject + lexical verb is still a sentence. Agreement is not coded because no IS/AM/ARE
+    is present.
+  ref: SV / Sentence Present; SV Agreement scope
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'NO'
+    Subject-Verb Agreement: 'NO'
+    USV: HORSE SING
+    Repeated SV: 'NO'
+- video: 3
+  category: SV
+  n: 5
+  utterance: I DRINK CUP
+  rationale: The core combination I DRINK already occurred in row 1, so this is a Repeated SV, not a USV.
+  ref: SV / USV coding - repeated SV combination
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'NO'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'YES'
+- video: 3
+  category: Parts of Speech
+  n: 1
+  utterance: DOG EAT CAKE
+  rationale: Two nouns, but Noun is selected once.
+  ref: Parts of Speech / "once per utterance"
+  answer: Noun, Verb
+- video: 3
+  category: Parts of Speech
+  n: 2
+  utterance: I AM HAPPY
+  rationale: AM is the main verb here and still counts as Verb.
+  ref: Parts of Speech / Codes
+  answer: Pronoun, Verb, Adjective
+- video: 3
+  category: Parts of Speech
+  n: 3
+  utterance: THE CANDLE ON BIG CAKE AND BOX
+  rationale: Five different classes, no verb of any kind. Do not add Verb where none exists.
+  ref: Parts of Speech / Codes
+  answer: Determiner, Noun, Preposition, Adjective, Conjunction
+- video: 3
+  category: Parts of Speech
+  n: 4
+  utterance: -S
+  rationale: Bound morpheme only. This is the single situation in which Parts of Speech is coded Absent.
+  ref: Parts of Speech / Absent
+  answer: Absent
+- video: 3
+  category: Inflectional Morphemes
+  n: 1
+  utterance: DOG EAT -ING CAKE
+  rationale: -ING attached to a lexical verb.
+  ref: Inflectional Morphemes / Correct use
+  answer: At least one inflectional morpheme
+- video: 3
+  category: Inflectional Morphemes
+  n: 2
+  utterance: -S CAKE DOG
+  rationale: Fronted -S with nothing to attach to.
+  ref: Inflectional Morphemes / Incorrect use
+  answer: No appropriate inflectional morphemes
+- video: 3
+  category: Inflectional Morphemes
+  n: 3
+  utterance: HIPPO -S CUP
+  rationale: -S correctly attached to a noun (possessive or plural).
+  ref: Inflectional Morphemes / Correct use
+  answer: At least one inflectional morpheme
+- video: 3
+  category: Inflectional Morphemes
+  n: 4
+  utterance: CAKE -ING BOX
+  rationale: There is no lexical verb for -ING to attach to.
+  ref: Inflectional Morphemes / Incorrect use
+  answer: No appropriate inflectional morphemes
+- video: 3
+  category: Grammatical Intent
+  n: 1
+  utterance: DOG EAT CAKE BIG
+  rationale: Word order is only 0.5, but subject and verb are correctly ordered and the proposition is
+    recoverable. This is the definition's own example pattern - 0.5 word order with Clear intent.
+  ref: Grammatical Intent / Video Probe Example
+  answer: Grammatical Intent Clear
+- video: 3
+  category: Grammatical Intent
+  n: 2
+  utterance: DOG BIG
+  rationale: Could be DOG IS BIG or BIG DOG - two different propositions.
+  ref: Grammatical Intent / "DOG BIG" example
+  answer: Grammatical Intent NOT Clear
+- video: 3
+  category: Grammatical Intent
+  n: 3
+  utterance: CAKE JUICE CUP
+  rationale: Listing of parts of speech.
+  ref: Grammatical Intent / Code as NOT clear if...
+  answer: Grammatical Intent NOT Clear
+- video: 3
+  category: Grammatical Intent
+  n: 4
+  utterance: HAPPY
+  rationale: Single-symbol utterances are always coded NOT clear - even though the same utterance would
+    score 1.0 on word order. These two codes come apart.
+  ref: Grammatical Intent / "Code as NOT clear if... Single symbol utterances"
+  answer: Grammatical Intent NOT Clear
+- video: 4
+  category: Listing
+  n: 1
+  utterance: SHOT BANDAID MEDICINE
+  rationale: A simple list of nouns.
+  ref: Listing / Examples
+  answer: Listing Present
+- video: 4
+  category: Listing
+  n: 2
+  utterance: I NEED SHOT BANDAID
+  rationale: Subject + verb present, so it is fully analyzed.
+  ref: Listing / "If the list contains a subject and verb..."
+  answer: Listing Not Present
+- video: 4
+  category: Listing
+  n: 3
+  utterance: OPEN CHECK WASH
+  rationale: A simple list of verbs.
+  ref: Listing / Examples
+  answer: Listing Present
+- video: 4
+  category: Listing
+  n: 4
+  utterance: SICK DUCK
+  rationale: Adjective + noun = more than one part of speech.
+  ref: Listing / "...or it contains more than one part of speech"
+  answer: Listing Not Present
+- video: 4
+  category: Word Order
+  n: 1
+  utterance: I GIVE SHOT
+  rationale: Accurate S-V-O.
+  ref: Word Order Score / General rules
+  answer: '1.0'
+- video: 4
+  category: Word Order
+  n: 2
+  utterance: SHOT GIVE I
+  rationale: Completely reversed; no part of the order is accurate.
+  ref: Word Order Score / General rules
+  answer: '0'
+- video: 4
+  category: Word Order
+  n: 3
+  utterance: I CHECK EARS BLUE
+  rationale: S-V-O is correct but the adjective follows the noun it modifies.
+  ref: Word Order Score / General rules
+  answer: '0.5'
+- video: 4
+  category: Word Order
+  n: 4
+  utterance: -ING
+  rationale: A bound morpheme used as a single-symbol utterance scores 0, not 1.0.
+  ref: Word Order Score / Single symbol utterances
+  answer: '0'
+- video: 4
+  category: SV
+  n: 1
+  utterance: YOU ARE CHECK -ING HEART
+  rationale: ARE is auxiliary, CHECK is the lexical main verb, YOU + ARE agree.
+  ref: SV / Lexical vs Non-lexical; SV Agreement examples
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'YES'
+    USV: YOU CHECK
+    Repeated SV: 'NO'
+- video: 4
+  category: SV
+  n: 2
+  utterance: I IS HURT
+  rationale: HURT here is an adjective (a symptom on this display), not a verb, so IS is the main verb
+    and there is no lexical verb. I + IS do not agree. No lexical verb means no USV.
+  ref: SV Agreement / Examples ("I IS BIG"); USV coding
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'NO'
+    Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'NO'
+- video: 4
+  category: SV
+  n: 3
+  utterance: BANDAID ON BLUE EARS
+  rationale: No verb, no sentence.
+  ref: SV / Sentence Present
+  answer:
+    SV Present: 'NO'
+    Lexical Verb: 'NO'
+    Non-lexical Verb: 'NO'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'NO'
+- video: 4
+  category: SV
+  n: 4
+  utterance: DUCK -S NEED MEDICINE
+  rationale: The -S can be a contracted copula (non-lexical verb), and NEED is the lexical verb. Agreement
+    is not coded - the code requires the symbol IS, AM, or ARE, and none is present.
+  ref: SV / USV coding ("I -S WASH -S BATHTUB -> SV = I WASH"); SV Agreement scope
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'NO'
+    USV: DUCK NEED
+    Repeated SV: 'NO'
+- video: 4
+  category: SV
+  n: 5
+  utterance: YOU CHECK MOUTH
+  rationale: YOU CHECK already occurred in row 1. Same core SV, different object, so it is a Repeated
+    SV.
+  ref: SV / USV coding - repeated SV combination
+  answer:
+    SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'NO'
+    Subject-Verb Agreement: 'NO'
+    USV: 'NO'
+    Repeated SV: 'YES'
+- video: 4
+  category: Parts of Speech
+  n: 1
+  utterance: I GIVE SHOT
+  rationale: Pronoun + verb + noun.
+  ref: Parts of Speech / Codes
+  answer: Pronoun, Verb, Noun
+- video: 4
+  category: Parts of Speech
+  n: 2
+  utterance: DUCK IS SICK
+  rationale: IS is the main verb and counts as Verb; SICK is an adjective on this display.
+  ref: Parts of Speech / Codes
+  answer: Noun, Verb, Adjective
+- video: 4
+  category: Parts of Speech
+  n: 3
+  utterance: BANDAID ON LITTLE EARS AND MOUTH
+  rationale: No verb of any kind here. Three nouns, but Noun is selected once.
+  ref: Parts of Speech / "once per utterance"
+  answer: Noun, Preposition, Adjective, Conjunction
+- video: 4
+  category: Parts of Speech
+  n: 4
+  utterance: DOG -S CHECK HEART
+  rationale: The contracted copula -S and the lexical verb CHECK are both verbs, but Verb is selected
+    only once.
+  ref: Parts of Speech / "once per utterance"; contracted copula
+  answer: Noun, Verb
+- video: 4
+  category: Inflectional Morphemes
+  n: 1
+  utterance: I CHECK -ING EARS
+  rationale: -ING attached to a lexical verb.
+  ref: Inflectional Morphemes / Correct use
+  answer: At least one inflectional morpheme
+- video: 4
+  category: Inflectional Morphemes
+  n: 2
+  utterance: -S SHOT DUCK
+  rationale: Fronted -S with nothing to attach to.
+  ref: Inflectional Morphemes / Incorrect use
+  answer: No appropriate inflectional morphemes
+- video: 4
+  category: Inflectional Morphemes
+  n: 3
+  utterance: DUCK -S MEDICINE
+  rationale: -S correctly attached to a noun.
+  ref: Inflectional Morphemes / Correct use
+  answer: At least one inflectional morpheme
+- video: 4
+  category: Inflectional Morphemes
+  n: 4
+  utterance: SHOT -ING BED
+  rationale: No lexical verb for -ING to attach to.
+  ref: Inflectional Morphemes / Incorrect use
+  answer: No appropriate inflectional morphemes
+- video: 4
+  category: Grammatical Intent
+  n: 1
+  utterance: DUCK NEED SHOT
+  rationale: Childlike but grammatically unambiguous.
+  ref: Grammatical Intent / Examples
+  answer: Grammatical Intent Clear
+- video: 4
+  category: Grammatical Intent
+  n: 2
+  utterance: DUCK SICK
+  rationale: Could be DUCK IS SICK or SICK DUCK - two different propositions.
+  ref: Grammatical Intent / "DOG BIG" example
+  answer: Grammatical Intent NOT Clear
+- video: 4
+  category: Grammatical Intent
+  n: 3
+  utterance: SHOT BANDAID MEDICINE
+  rationale: Listing of parts of speech.
+  ref: Grammatical Intent / Code as NOT clear if...
+  answer: Grammatical Intent NOT Clear
+- video: 4
+  category: Grammatical Intent
+  n: 4
+  utterance: I GIVE MEDICINE DOG
+  rationale: The preposition/indirect-object marking is missing, but the proposition is recoverable. Missing
+    grammatical elements alone do not make intent unclear.
+  ref: Grammatical Intent / "can be a stripped-down utterance and still be clear"
+  answer: Grammatical Intent Clear
