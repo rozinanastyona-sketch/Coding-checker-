@@ -291,11 +291,19 @@ def issue_category(issue):
     cat = CATEGORY_OF_KIND.get(issue.kind)
     if cat:
         return cat
-    prefix = (issue.message or "").split(" - ")[0].strip()
+    msg = issue.message or ""
+    # Wrong-value messages read "<Category> - key: X, you coded: Y".
+    prefix = msg.split(" - ")[0].strip()
     for c in CODING_CATEGORY_PREFIXES:
         if prefix == c:
             return c
-    return prefix or "Coding"
+    # "missing_row" messages read "<Category> is not coded for this utterance. Key: X"
+    # — no " - " separator, so match the leading category name instead.
+    for c in CODING_CATEGORY_PREFIXES:
+        if msg.startswith(c):
+            return c
+    # Never fall back to the raw message: it can contain the key's value.
+    return "Coding"
 
 
 def student_hint(grammar, category_label):
@@ -363,14 +371,12 @@ if ROLE == "teacher":
     page = st.sidebar.radio(
         "Menu", ["New Check", "Key Library", "Training", "Item Bank"], label_visibility="collapsed"
     )
+    st.sidebar.markdown("---")
+    st.sidebar.caption("Developed for research and coder training in AAC lab.")
 else:
-    # Students run only the wizard: Upload -> Summary -> Review -> Training.
-    # No keys, no Key Library, no Item Bank, no free video/category choice.
+    # Students run only the wizard (Upload -> Summary -> Review -> Training) and have
+    # a single page, so the sidebar shows nothing but the "Coding Checker" title.
     page = "New Check"
-    st.sidebar.markdown("### Practice")
-    st.sidebar.caption("Upload  ›  results  ›  review  ›  practice")
-st.sidebar.markdown("---")
-st.sidebar.caption("Developed for research and coder training in AAC lab.")
 
 
 if page == "New Check":
@@ -577,33 +583,50 @@ if page == "New Check":
             )
             flagged = [u for u in student_utts if issues_by_utt.get(u.uid)]
 
+            def _chips(pairs):
+                # pairs: list of (label, is_missing)
+                out = ""
+                for label, miss in pairs:
+                    tail = " — missing" if miss else ""
+                    out += (
+                        '<span class="flagcard" style="display:inline-block;margin:3px 6px 3px 0;">'
+                        f'<span class="cat">{label}</span>{tail}</span>'
+                    )
+                return out
+
             if not flagged and not missing_utts:
                 st.success("No differences from the key. Excellent work!")
             else:
-                st.markdown(f"**{len(flagged)} of your utterances** need another look.")
+                total = len(flagged) + len(missing_utts)
+                st.markdown(f"**{total} item(s)** need another look.")
                 for utt in flagged:
-                    cats = sorted({issue_category(i) for i in issues_by_utt[utt.uid]})
+                    ui = issues_by_utt[utt.uid]
+                    wrong_cats = sorted({issue_category(i) for i in ui if i.kind != "missing"})
+                    miss_cats = sorted({issue_category(i) for i in ui if i.kind == "missing"})
                     text = utt.utterance_text or "no transcript"
                     with st.container(border=True):
                         st.markdown(f'**Utterance {utt.uid:02d}** — "{text}"')
-                        chips = "".join(
-                            f'<span class="flagcard" style="display:inline-block;margin:3px 6px 3px 0;">'
-                            f'<span class="cat">{c}</span></span>' for c in cats
+                        pairs = [(c, False) for c in wrong_cats] + [(c, True) for c in miss_cats]
+                        st.markdown("Re-check: " + _chips(pairs), unsafe_allow_html=True)
+
+                # Missing whole utterances join the same list, marked "missing".
+                for i in missing_utts:
+                    text = i.expected or "no transcript"
+                    with st.container(border=True):
+                        st.markdown(f'**Utterance not coded** — "{text}"')
+                        st.markdown(
+                            "Re-check: " + _chips([("Missing utterance", True)])
+                            + "  <span style='color:var(--muted)'>please code this utterance</span>",
+                            unsafe_allow_html=True,
                         )
-                        st.markdown("Re-check: " + chips, unsafe_allow_html=True)
 
-                if missing_utts:
-                    st.info(
-                        f"{len(missing_utts)} utterance(s) in the key were not coded in your file. "
-                        "Rewatch the video and check whether you missed any utterances."
-                    )
-
-                # How this is coded — the operational-definition rule for each category
-                # flagged, shown once (no answers). Same text goes into the file's comments.
-                present_cats = sorted({issue_category(i) for i in issues})
-                if missing_utts and "Missing utterance" not in present_cats:
-                    present_cats.append("Missing utterance")
-                rule_cats = [c for c in present_cats if student_hint(grammar, c)]
+                # How this is coded — rule for each category with a genuine coding
+                # difference (not the merely-missing ones), shown once, no answers.
+                rule_cats = sorted({
+                    issue_category(i) for i in issues
+                    if i.kind not in ("missing", "missing_utterance")
+                })
+                rule_cats = [c for c in rule_cats if student_hint(grammar, c)]
                 if rule_cats:
                     st.markdown("##### How these categories are coded")
                     st.caption("The rule for each category you need to re-check — not the answer.")
@@ -613,26 +636,39 @@ if page == "New Check":
             st.markdown("---")
             st.markdown("##### Your marked-up file")
             st.caption(
-                "One file: your own coding with the utterances to re-check shaded, and a hover note "
-                "on each giving the category and its rule — no answers. Missing and extra utterances "
-                "are marked too. Rewatch, fix, and run the check again."
+                "One file: your own coding with the utterances to re-check shaded and a hover note "
+                "on each. Categories you didn't code are marked as missing, and any utterance you "
+                "missed is inserted with its transcript and a note to code it — no answers. "
+                "Rewatch, fix, and run the check again."
             )
 
-            # Per-row categories (coding errors + extra utterances) and the anchor rows
-            # for missing utterances. All answer-free — only category labels and rules.
-            row_categories = {}
+            # File inputs, all answer-free for coded values:
+            #  - wrong_rows: rows with a wrong coded value -> rule comment
+            #  - missing_cat_rows: a category not coded at all -> "missing" note only
+            #  - missing_utts_arg: whole utterances to insert with their transcript
+            utt_by_uid = {u.uid: u for u in student_utts}
+            wrong_rows, missing_cat_rows = {}, {}
             for i in issues:
-                if i.row_index is not None:
-                    row_categories.setdefault(i.row_index, set()).add(issue_category(i))
-            row_categories = {r: sorted(c) for r, c in row_categories.items()}
-            missing_after = [i.insert_after_row_index for i in issues if i.kind == "missing_utterance"]
+                if i.kind == "missing_utterance":
+                    continue
+                if i.kind == "missing":
+                    u = utt_by_uid.get(i.utterance_id)
+                    if u is not None:
+                        missing_cat_rows.setdefault(u.anchor_row_index, set()).add(issue_category(i))
+                elif i.row_index is not None:
+                    wrong_rows.setdefault(i.row_index, set()).add(issue_category(i))
+            wrong_rows = {r: sorted(c) for r, c in wrong_rows.items()}
+            missing_cat_rows = {r: sorted(c) for r, c in missing_cat_rows.items()}
+            missing_utts_arg = [
+                (i.insert_after_row_index, i.expected or "") for i in missing_utts
+            ]
 
             base = Path(st.session_state.get("uploaded_name", "my_file.xlsx")).stem
             fb_path = Path(tempfile.gettempdir()) / f"{base}_feedback.xlsx"
             try:
                 write_student_feedback_excel(
                     Path(st.session_state["student_path"]), fb_path, grammar,
-                    row_categories, missing_after=missing_after,
+                    wrong_rows, missing_cat_rows, missing_utts_arg,
                 )
                 fb_bytes = fb_path.read_bytes()
             except Exception:
