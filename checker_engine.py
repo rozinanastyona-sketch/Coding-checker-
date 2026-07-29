@@ -1031,6 +1031,37 @@ def score_passport_match(student_first: List[str], passport: Dict[str, Any]) -> 
     return score
 
 
+def passport_match_quality(student_first: List[str], passport: Dict[str, Any]) -> float:
+    """How well a file matches a key, as 0..1, ignoring utterance ORDER.
+
+    score_passport_match compares position by position, which is fine for
+    ranking but wrong as an acceptance test: a coder who missed one early
+    utterance shifts every later one out of alignment and scores near zero -
+    exactly the mistake this program exists to find. Here each of the file's
+    first utterances is matched against the key's first utterances wherever it
+    occurs (2 points exact, 1 point containment), so a missing or extra
+    utterance costs only its own points.
+    """
+    ref_first = passport.get("first_utterances", []) or []
+    if not student_first or not ref_first:
+        return 0.0
+    total = 0
+    for a in student_first:
+        na = norm(a).lower()
+        best = 0
+        for b in ref_first:
+            nb = norm(b).lower()
+            if not na or not nb:
+                continue
+            if na == nb:
+                best = max(best, 2)
+            elif na in nb or nb in na:
+                best = max(best, 1)
+        total += best
+    denom = 2 * min(len(student_first), len(ref_first))
+    return (total / denom) if denom else 0.0
+
+
 def suggest_references(student_df: pd.DataFrame, grammar: Dict[str, Any], library_dir: str | Path, top_k: int = 3) -> Tuple[List[str], List[Dict[str, Any]]]:
     first_n = grammar.get("output", {}).get("first_utterances_in_passport", 5)
     student_first = extract_first_utterances(student_df, grammar, n=first_n)
@@ -1388,12 +1419,14 @@ def write_student_feedback_excel(
     wrong_rows: Dict[int, List[str]],
     missing_cat_rows: Optional[Dict[int, List[str]]] = None,
     missing_utts: Optional[List[Tuple[Optional[int], str]]] = None,
+    scores_rows: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
     """The student's single marked-up file: general rules + highlighted errors.
 
-    Answer-free for coded values. It keeps every original column and adds no
-    columns; the only structural change is that MISSING UTTERANCES are inserted
-    as new rows so the student can see what to code.
+    Answer-free for coded values. Like the teacher's report it keeps only the
+    columns the coding scheme uses (the required ones plus Modifier*), drops the
+    rest of the Observer XT export, and appends the Scores sheet; missing
+    utterances are inserted as rows so the student can see what to code.
       * wrong_rows — rows where a coded value differs from the key: shaded red,
         with a hover comment naming each flagged CATEGORY and its operational
         definition (feedback.yaml -> student_hints). Never the key value.
@@ -1410,6 +1443,22 @@ def write_student_feedback_excel(
     """
     wb = load_workbook(student_input_path)
     ws = wb.active
+
+    header = [cell.value for cell in ws[1]]
+    header_map = {str(v).strip(): i + 1 for i, v in enumerate(header) if v is not None}
+
+    # Same pruning as the teacher's report: keep the columns the coding scheme
+    # uses and drop the rest of the Observer XT export. Deleting columns does not
+    # move rows, so the row indices used below stay valid.
+    required = grammar["columns"]["required"]
+    modifier_prefix = grammar["columns"]["modifier_columns"]["detect_by_prefix"]
+    keep_names = set(required) | {
+        name for name in header_map if str(name).startswith(modifier_prefix)
+    }
+    for idx in sorted(
+        (i for name, i in header_map.items() if name not in keep_names), reverse=True
+    ):
+        ws.delete_cols(idx)
 
     header = [cell.value for cell in ws[1]]
     header_map = {str(v).strip(): i + 1 for i, v in enumerate(header) if v is not None}
@@ -1484,5 +1533,17 @@ def write_student_feedback_excel(
         cm.width = 360
         cm.height = 100
         marker.comment = cm
+
+    # Readability, then the Scores sheet (same summary the teacher's report gets:
+    # 1/0 per category with live SUM/AVERAGE totals and percentages).
+    for col in range(1, ws.max_column + 1):
+        letter = get_column_letter(col)
+        ws.column_dimensions[letter].width = min(
+            max(ws.column_dimensions[letter].width or 12, 14), 35
+        )
+    if comment_col:
+        ws.column_dimensions[get_column_letter(comment_col)].width = 35
+    if scores_rows:
+        write_scores_sheet(wb, scores_rows)
 
     wb.save(output_path)

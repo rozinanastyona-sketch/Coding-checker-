@@ -23,8 +23,8 @@ from checker_engine import (
     index_reference_folder,
     load_grammar,
     load_reference_passports,
+    passport_match_quality,
     read_excel_first_sheet_or_named,
-    score_passport_match,
     suggest_references,
     write_annotated_excel,
     write_student_feedback_excel,
@@ -371,12 +371,20 @@ if ROLE == "teacher":
     page = st.sidebar.radio(
         "Menu", ["New Check", "Key Library", "Training", "Item Bank"], label_visibility="collapsed"
     )
-    st.sidebar.markdown("---")
-    st.sidebar.caption("Developed for research and coder training in AAC lab.")
 else:
     # Students run only the wizard (Upload -> Summary -> Review -> Training) and have
-    # a single page, so the sidebar shows nothing but the "Coding Checker" title.
+    # a single page, so the sidebar shows no menu.
     page = "New Check"
+
+st.sidebar.markdown("---")
+# Switch role without reloading the page: drop the role and every file/result from
+# this session, then rerun — password_ok() asks for the password again.
+if st.sidebar.button(f"Switch role  ({ROLE})", use_container_width=True):
+    for k in list(st.session_state.keys()):
+        st.session_state.pop(k, None)
+    st.rerun()
+st.sidebar.caption("Developed for research and coder training in AAC lab.")
+st.sidebar.caption("by Anastasiia Volkova")
 
 
 if page == "New Check":
@@ -441,11 +449,10 @@ if page == "New Check":
         first_utts, suggestions = suggest_references(student_df, grammar, REFERENCE_DIR, top_k=5)
         ordered = suggestions or passports
 
-        # Match-quality gate. Compare the file's first utterances with the best key.
+        # Match-quality gate, order-independent: a coder who missed an utterance
+        # must still be recognised, since that is exactly what we are checking for.
         best_ref = ordered[0]
-        best_score = score_passport_match(first_utts, best_ref)
-        denom = 2 * min(len(first_utts), len(best_ref.get("first_utterances", [])))
-        quality = (best_score / denom) if denom else 0.0
+        quality = passport_match_quality(first_utts, best_ref)
 
         def run_check(selected):
             key_df = read_excel_first_sheet_or_named(
@@ -636,10 +643,10 @@ if page == "New Check":
             st.markdown("---")
             st.markdown("##### Your marked-up file")
             st.caption(
-                "One file: your own coding with the utterances to re-check shaded and a hover note "
-                "on each. Categories you didn't code are marked as missing, and any utterance you "
+                "One file: your coding with the utterances to re-check shaded and a hover note on "
+                "each. Categories you didn't code are marked as missing, and any utterance you "
                 "missed is inserted with its transcript and a note to code it — no answers. "
-                "Rewatch, fix, and run the check again."
+                "The Scores sheet shows your totals and percentage per category."
             )
 
             # File inputs, all answer-free for coded values:
@@ -669,6 +676,7 @@ if page == "New Check":
                 write_student_feedback_excel(
                     Path(st.session_state["student_path"]), fb_path, grammar,
                     wrong_rows, missing_cat_rows, missing_utts_arg,
+                    scores_rows=scores_rows,
                 )
                 fb_bytes = fb_path.read_bytes()
             except Exception:
