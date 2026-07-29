@@ -27,7 +27,7 @@ from checker_engine import (
     score_passport_match,
     suggest_references,
     write_annotated_excel,
-    write_student_reference_excel,
+    write_student_feedback_excel,
 )
 
 ROOT = Path(__file__).parent
@@ -296,6 +296,12 @@ def issue_category(issue):
         if prefix == c:
             return c
     return prefix or "Coding"
+
+
+def student_hint(grammar, category_label):
+    """The answer-free operational-definition hint for a category, or ''."""
+    hints = (grammar.get("feedback", {}) or {}).get("student_hints", {}) or {}
+    return str(hints.get(category_label, "") or "")
 
 
 def password_ok() -> bool:
@@ -592,56 +598,56 @@ if page == "New Check":
                         "Rewatch the video and check whether you missed any utterances."
                     )
 
-            st.markdown("---")
-            st.markdown("##### Take your file back to Observer")
+                # How this is coded — the operational-definition rule for each category
+                # flagged, shown once (no answers). Same text goes into the file's comments.
+                present_cats = sorted({issue_category(i) for i in issues})
+                if missing_utts and "Missing utterance" not in present_cats:
+                    present_cats.append("Missing utterance")
+                rule_cats = [c for c in present_cats if student_hint(grammar, c)]
+                if rule_cats:
+                    st.markdown("##### How these categories are coded")
+                    st.caption("The rule for each category you need to re-check — not the answer.")
+                    for c in rule_cats:
+                        st.markdown(f"**{c}** — {student_hint(grammar, c)}")
 
-            # Category flagged per DataFrame row — no key values, so the feedback
-            # copy stays answer-free. Built from the same issues shown above.
-            categories_by_row = {}
+            st.markdown("---")
+            st.markdown("##### Your marked-up file")
+            st.caption(
+                "One file: your own coding with the utterances to re-check shaded, and a hover note "
+                "on each giving the category and its rule — no answers. Missing and extra utterances "
+                "are marked too. Rewatch, fix, and run the check again."
+            )
+
+            # Per-row categories (coding errors + extra utterances) and the anchor rows
+            # for missing utterances. All answer-free — only category labels and rules.
+            row_categories = {}
             for i in issues:
                 if i.row_index is not None:
-                    categories_by_row.setdefault(i.row_index, set()).add(issue_category(i))
-            categories_by_row = {r: sorted(c) for r, c in categories_by_row.items()}
+                    row_categories.setdefault(i.row_index, set()).add(issue_category(i))
+            row_categories = {r: sorted(c) for r, c in row_categories.items()}
+            missing_after = [i.insert_after_row_index for i in issues if i.kind == "missing_utterance"]
 
             base = Path(st.session_state.get("uploaded_name", "my_file.xlsx")).stem
-            ref_path = Path(tempfile.gettempdir()) / f"{base}_feedback.xlsx"
+            fb_path = Path(tempfile.gettempdir()) / f"{base}_feedback.xlsx"
             try:
-                write_student_reference_excel(
-                    Path(st.session_state["student_path"]), ref_path, grammar, categories_by_row
+                write_student_feedback_excel(
+                    Path(st.session_state["student_path"]), fb_path, grammar,
+                    row_categories, missing_after=missing_after,
                 )
-                ref_bytes = ref_path.read_bytes()
+                fb_bytes = fb_path.read_bytes()
             except Exception:
-                ref_bytes = None
+                fb_bytes = None
 
-            dl1, dl2 = st.columns(2)
-            with dl1:
-                st.markdown("**Working file**")
-                st.caption(
-                    "Your original file, unchanged — every Observer XT column intact. "
-                    "This is the one you keep working from."
-                )
+            if fb_bytes is not None:
                 st.download_button(
-                    "⬇  Download working file",
-                    data=st.session_state.get("uploaded_bytes", b""),
-                    file_name=st.session_state.get("uploaded_name", "my_file.xlsx"),
+                    "⬇  Download my marked-up file",
+                    data=fb_bytes,
+                    file_name=fb_path.name,
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     type="primary",
                 )
-            with dl2:
-                st.markdown("**Feedback copy** · reference only")
-                st.caption(
-                    "A read-only copy with the utterances to re-check shaded red and a hover note "
-                    "naming the category (no answers). Open it beside Observer — don't import it."
-                )
-                if ref_bytes is not None:
-                    st.download_button(
-                        "⬇  Download feedback copy",
-                        data=ref_bytes,
-                        file_name=ref_path.name,
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
-                else:
-                    st.caption("_(Feedback copy unavailable for this file.)_")
+            else:
+                st.caption("_(Marked-up file unavailable for this file.)_")
 
             st.markdown("")
             c1, c2, c3 = st.columns(3)

@@ -1381,24 +1381,28 @@ def write_annotated_excel(
     wb.save(output_path)
 
 
-def write_student_reference_excel(
+def write_student_feedback_excel(
     student_input_path: str | Path,
     output_path: str | Path,
     grammar: Dict[str, Any],
-    categories_by_row: Dict[int, List[str]],
+    row_categories: Dict[int, List[str]],
+    missing_after: Optional[List[Optional[int]]] = None,
 ) -> None:
-    """A student's 'feedback copy' — a reference, never for re-import.
+    """The student's single marked-up file: general rules + highlighted errors.
 
-    Unlike write_annotated_excel this keeps EVERY original column, inserts no
-    rows and adds no columns, so it stays a faithful picture of the student's
-    own file. Rows where the coding differs from the key are shaded red and the
-    Behavior cell gets a hover comment naming only the CATEGORY to re-check —
-    never the key's value, never a missing utterance's transcript. The student
-    reads this alongside Observer while fixing their own coding; the clean
-    working file is downloaded separately for Observer itself.
+    Answer-free by construction. It keeps EVERY original column, inserts no rows
+    and adds no columns, so it stays a faithful picture of the student's own file.
+      * Rows where the coding differs from the key are shaded red; the Behavior
+        cell gets a hover comment naming each flagged CATEGORY and its operational
+        definition (from feedback.yaml -> student_hints). Never the key value.
+      * Missing utterances are marked by shading the row they belong after and
+        noting that a coded utterance is missing there — never its transcript.
+      * Extra utterances arrive through row_categories like any other flag.
+    No Scores sheet is written, so the key's utterances are never listed.
 
-    categories_by_row maps a student DataFrame row index (0-based, so Excel row
-    = index + 2) to the sorted category labels flagged on that row.
+    row_categories maps a student DataFrame row index (0-based, Excel row = index
+    + 2) to the category labels flagged on that row. missing_after lists the row
+    indices after which a key utterance is missing.
     """
     wb = load_workbook(student_input_path)
     ws = wb.active
@@ -1407,18 +1411,54 @@ def write_student_reference_excel(
     header_map = {str(v).strip(): i + 1 for i, v in enumerate(header) if v is not None}
     behavior_col = header_map.get("Behavior") or 1
 
+    hints = (grammar.get("feedback", {}) or {}).get("student_hints", {}) or {}
     red = PatternFill("solid", fgColor=grammar["colors"]["error"])
-    for row_index, cats in categories_by_row.items():
+    orange = PatternFill("solid", fgColor=grammar["colors"]["usv_missing_note"])
+
+    def comment_for(cats: List[str]) -> str:
+        lines = ["Re-check this utterance:"]
+        for c in cats:
+            h = clean_text(hints.get(c))
+            lines.append(f"• {c} — {h}" if h else f"• {c}")
+        return "\n".join(lines)
+
+    flagged_rows = set()
+    for row_index, cats in (row_categories or {}).items():
         excel_row = row_index + 2
         if excel_row < 2 or excel_row > ws.max_row:
             continue
+        flagged_rows.add(excel_row)
         for col in range(1, ws.max_column + 1):
             ws.cell(row=excel_row, column=col).fill = red
         cell = ws.cell(row=excel_row, column=behavior_col)
-        body = "Re-check this utterance for: " + ", ".join(cats)
-        c = CellComment(body, "Coding Checker")
-        c.width = 300
-        c.height = 90
-        cell.comment = c
+        cats_sorted = sorted(cats)
+        cm = CellComment(comment_for(cats_sorted), "Coding Checker")
+        cm.width = 360
+        cm.height = max(90, 30 * (len(cats_sorted) + 1))
+        cell.comment = cm
+
+    # Missing utterances: mark the row they belong after (no transcript, no count leak
+    # of content). Several missing after the same row are merged into one note.
+    counts: Dict[int, int] = {}
+    for anchor in (missing_after or []):
+        a = anchor if isinstance(anchor, int) and anchor >= 0 else -1
+        counts[a] = counts.get(a, 0) + 1
+    mh = clean_text(hints.get("Missing utterance"))
+    for anchor, n in counts.items():
+        excel_row = anchor + 2 if anchor >= 0 else 2
+        excel_row = max(2, min(excel_row, ws.max_row))
+        if excel_row not in flagged_rows:
+            for col in range(1, ws.max_column + 1):
+                ws.cell(row=excel_row, column=col).fill = orange
+        cell = ws.cell(row=excel_row, column=behavior_col)
+        noun = "utterance" if n == 1 else "utterances"
+        where = "before the first row" if anchor < 0 else "after this row"
+        head = f"⟨ {n} coded {noun} from the key is missing {where}. ⟩"
+        body = head + (f"\n\n{mh}" if mh else "")
+        prev = cell.comment.text if cell.comment else ""
+        cm = CellComment((prev + "\n\n" if prev else "") + body, "Coding Checker")
+        cm.width = 360
+        cm.height = 120
+        cell.comment = cm
 
     wb.save(output_path)

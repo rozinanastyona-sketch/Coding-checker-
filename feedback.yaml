@@ -178,3 +178,71 @@ fallback:
   missing_mods: "{category} - key: {key}, you coded: {found}."
   extra_mods: "{category} - key: {key}, you coded: {found}."
   missing_row: "{category} is not coded for this utterance. Key: {key}."
+
+# Student-facing hints. Unlike everything above, these contain NO placeholders
+# ({key}/{found}/{missing}) — they never reveal the answer, only the operational
+# definition of the category. Shown to students on the Review page and inside the
+# comments of their marked-up file, keyed by the error category. Edit wording here.
+student_hints:
+  Listing: >-
+    A simple list is 3 or more symbols of the same part of speech, with no subject and
+    verb and no more than one part of speech. When Listing is present, code only Number
+    of Symbols, Number of Relevant Symbols, and Parts of Speech.
+  Communicative Intent: >-
+    Every utterance is coded for Communicative Intent: whether the child selected the
+    symbols with an intention to communicate something to someone, rather than selecting
+    random symbols.
+  Imitativeness: >-
+    Imitativeness is judged on what happened BEFORE the utterance began - whether the
+    child's production contains at least one novel symbol compared with the examiner's
+    immediately prior spoken or aided utterance.
+  Independence: >-
+    Independence is judged on what happens AFTER the utterance has begun - whether the
+    examiner prompted the child to add symbols. If symbols are added following the
+    examiner's prompt, the completed utterance is a co-construction.
+  Number of Symbols: >-
+    The Number of Symbols follows from the utterance itself, so if your count differs,
+    first check that you transcribed the utterance correctly.
+  Number of Relevant Symbols: >-
+    Count only the relevant symbols; put irrelevant symbols in square brackets, e.g.
+    WASH [CORN] EGG.
+  Word Order: >-
+    Score how much of the word order is accurate: accurate throughout scores 1, accurate
+    in part and inaccurate in part scores 0.5, and no accurate order scores 0. Two
+    nouns/pronouns, verbs, prepositions or adjectives by themselves score 1; a single
+    symbol scores 1 unless it is a bound morpheme used alone, which scores 0.
+  SV: >-
+    Work through each column: whether a sentence (subject and verb) is present; whether
+    the verb is lexical or a non-lexical 'to be' verb (IS, AM, ARE); and, only when a 'to
+    be' verb is present, whether the subject and verb agree. Code a USV - the subject
+    plus the lexical verb only - solely when there is a lexical verb, and never for a
+    repeated SV combination.
+  Parts of Speech: >-
+    Select every part of speech present in the utterance, using relevant symbols only,
+    and select each part of speech only once per utterance.
+  Inflectional Morphemes: >-
+    Only -S and -ING used appropriately count - attached to a symbol they can belong to.
+    An irrelevant morpheme, such as -ING with no lexical verb, is not counted.
+  Grammatical Intent: >-
+    Grammatical intent must be judged from context - the same utterance can be clear in
+    one instance and not clear in another. A single-symbol utterance, or a listing of
+    parts of speech, is coded as NOT clear.
+  Transcript: >-
+    The codes depend on getting the utterance itself right - check the video again and
+    correct the transcript first.
+  USV note: >-
+    When a unique subject-verb combination is present, write it out in the Comment as
+    "USV: SUBJECT VERB".
+  Extra code: >-
+    A category is coded here that does not apply to this utterance. Check which categories
+    apply - for example, when Listing is present, only Number of Symbols, Number of
+    Relevant Symbols, and Parts of Speech are coded.
+  Extra utterance: >-
+    This utterance may not belong. Review the rules on utterance boundaries and check
+    whether it should have been coded at all.
+  Boundary: >-
+    The boundaries of this utterance could not be determined confidently. Check it by
+    hand against the boundary rules.
+  Missing utterance: >-
+    A coded utterance from the key is missing here. Rewatch the video, check whether you
+    missed an utterance, and add it.
