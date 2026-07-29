@@ -24,6 +24,7 @@ from checker_engine import (
     load_grammar,
     load_reference_passports,
     read_excel_first_sheet_or_named,
+    score_passport_match,
     suggest_references,
     write_annotated_excel,
 )
@@ -111,7 +112,7 @@ st.markdown(THEME_CSS, unsafe_allow_html=True)
 
 
 def render_stepper(step: int) -> None:
-    labels = ["Upload", "Summary", "Review"]
+    labels = ["Upload", "Summary", "Review", "Training"]
     html = '<div class="stepper">'
     for i, lab in enumerate(labels):
         cls = "stp" + (" active" if i == step else "") + (" done" if i < step else "")
@@ -148,6 +149,23 @@ TRAINABLE = {
     "Grammatical Intent": "Grammatical Intent",
 }
 POS_OPTIONS = ["Noun", "Pronoun", "Verb", "Preposition", "Adjective", "Determiner", "Conjunction", "Absent"]
+# For the "which categories are coded when Listing is present?" item. The student
+# picks the correct subset; the rest are distractors from the normal coding set.
+LISTING_MOD_OPTIONS = [
+    "Number of Symbols", "Number of Relevant Symbols", "Parts of Speech",
+    "Word Order", "SV", "Inflectional Morphemes", "Grammatical Intent",
+]
+# Student upload gate: the best-matching key must reach this share of the maximum
+# possible first-utterance match score, or the file is refused and nothing opens.
+# Keys are a serious research instrument, so a non-matching file reveals nothing.
+MATCH_THRESHOLD = 0.5
+# Category prefixes used to label a student's error by category without ever
+# showing the key's value.
+CODING_CATEGORY_PREFIXES = [
+    "Listing", "Communicative Intent", "Imitativeness", "Independence",
+    "Number of Symbols", "Number of Relevant Symbols", "Word Order", "SV",
+    "Parts of Speech", "Inflectional Morphemes", "Grammatical Intent",
+]
 ITEM_OPTIONS = {
     "Listing": ["Listing Present", "Listing Not Present"],
     "Word Order": ["1.0", "0.5", "0"],
@@ -160,6 +178,10 @@ def _grade_item(item, given):
     """Return (all_correct, detail_markdown)."""
     cat = item["category"]
     ans = item["answer"]
+    if item.get("mode") == "modifiers":
+        want = {x.strip() for x in ans}
+        got = set(given)
+        return got == want, f'Key: {", ".join(ans)}'
     if cat == "SV":
         lines = []
         all_ok = True
@@ -167,7 +189,13 @@ def _grade_item(item, given):
             g = str(given.get(col, "")).strip()
             cv = str(correct_v).strip()
             if col == "USV":
-                ok = g.upper() == cv.upper() or (g.upper() in ("", "NO") and cv.upper() == "NO")
+                # Accept the coding-sheet form the student is practising, e.g.
+                # "USV: DOG EAT" or just "DOG EAT"; "NO"/"NONE" means no USV.
+                g_norm = _re.sub(r"^\s*usv\s*:\s*", "", g, flags=_re.I).strip()
+                if cv.upper() == "NO":
+                    ok = g_norm.upper() in ("NO", "NONE")
+                else:
+                    ok = g_norm.upper() == cv.upper()
             else:
                 ok = g.upper() == cv.upper()
             all_ok = all_ok and ok
@@ -187,27 +215,50 @@ def render_training_item(item, seq):
     key = f'ti_{item["video"]}_{cat}_{item["n"]}'
     with st.container(border=True):
         st.markdown(f'**{seq}.**  "{item["utterance"]}"')
-        if cat == "SV":
+        incomplete = False
+        if item.get("mode") == "modifiers":
+            given = st.multiselect(
+                "Listing is present here. Which categories do you code? Select all that apply.",
+                LISTING_MOD_OPTIONS, key=key + "_mods",
+            )
+            incomplete = not given
+        elif cat == "SV":
             sv_cols = load_training_items().get("sv_columns", [])
             given = {}
             cols = st.columns(2)
             for i, colname in enumerate(sv_cols):
                 with cols[i % 2]:
                     if colname == "USV":
+                        # Mandatory: the student writes the USV note the way they
+                        # would in Observer's Comment column — this is the skill.
                         given[colname] = st.text_input(
-                            "USV (type the subject+verb, or NO)", key=key + "_USV"
+                            'USV — write it out as "USV: SUBJECT VERB" (or NO if none)',
+                            key=key + "_USV", placeholder="USV: DOG EAT",
                         )
                     else:
+                        # index=None so nothing is pre-selected — the student must
+                        # decide each YES/NO rather than accept a default.
                         given[colname] = st.radio(
-                            colname, ["YES", "NO"], key=key + "_" + colname, horizontal=True
+                            colname, ["YES", "NO"], key=key + "_" + colname,
+                            horizontal=True, index=None,
                         )
+            missing_radio = any(given.get(c) is None for c in sv_cols if c != "USV")
+            missing_usv = not str(given.get("USV", "")).strip()
+            incomplete = missing_radio or missing_usv
         elif cat == "Parts of Speech":
             given = st.multiselect("Parts of speech present", POS_OPTIONS, key=key + "_ms")
         else:
             given = st.radio("Your answer", ITEM_OPTIONS[cat], key=key + "_r", index=None)
+            incomplete = given is None
 
         if st.button("Check answer", key=key + "_btn"):
-            st.session_state[key + "_done"] = True
+            if incomplete:
+                st.warning(
+                    "Answer every field before checking — choose YES or NO for each row "
+                    "and write out the USV."
+                )
+            else:
+                st.session_state[key + "_done"] = True
 
         if st.session_state.get(key + "_done"):
             correct, detail = _grade_item(item, given)
@@ -217,7 +268,7 @@ def render_training_item(item, seq):
                 st.error("Not quite — compare with the key below.")
             if detail:
                 st.markdown(detail)
-            st.info(f'**Why:** {item["rationale"]}\n\n_Operational Definitions: {item["ref"]}_')
+            st.info(f'**Why:** {item["rationale"]}')
 
 
 def _flag_html(issues_list):
@@ -227,6 +278,23 @@ def _flag_html(issues_list):
         prefix = f'<span class="cat">{cat}</span> — ' if cat else ""
         cards += f'<div class="flagcard">{prefix}{i.message}</div>'
     return cards
+
+
+def issue_category(issue):
+    """A safe category label for one issue — never exposes the key's value.
+
+    Coding-category issues carry their category as the message prefix before
+    ' - ' (e.g. "Word Order - key: ..."); non-coding issues are mapped by kind.
+    Students see only this label, never the rest of the message.
+    """
+    cat = CATEGORY_OF_KIND.get(issue.kind)
+    if cat:
+        return cat
+    prefix = (issue.message or "").split(" - ")[0].strip()
+    for c in CODING_CATEGORY_PREFIXES:
+        if prefix == c:
+            return c
+    return prefix or "Coding"
 
 
 def password_ok() -> bool:
@@ -289,39 +357,58 @@ if ROLE == "teacher":
         "Menu", ["New Check", "Key Library", "Training", "Item Bank"], label_visibility="collapsed"
     )
 else:
-    # Students only ever see the Training page. No keys, no key library, no item bank.
-    page = "Training"
-    st.sidebar.markdown("### Training")
-    st.sidebar.caption("Practice mode")
+    # Students run only the wizard: Upload -> Summary -> Review -> Training.
+    # No keys, no Key Library, no Item Bank, no free video/category choice.
+    page = "New Check"
+    st.sidebar.markdown("### Practice")
+    st.sidebar.caption("Upload  ›  results  ›  review  ›  practice")
 st.sidebar.markdown("---")
 st.sidebar.caption("Developed for research and coder training in AAC lab.")
 
 
 if page == "New Check":
 
+    is_student = ROLE == "student"
+
     def goto(step: int) -> None:
         st.session_state["step"] = step
         st.rerun()
 
+    def reset_flow() -> None:
+        for k in ("results", "notes", "uploaded_name", "student_path",
+                  "uploaded_bytes", "selected_ref"):
+            st.session_state.pop(k, None)
+        goto(0)
+
     step = st.session_state.get("step", 0)
     passports = load_reference_passports(REFERENCE_DIR)
     if not passports:
-        st.title("New Check")
-        st.warning("No reference keys loaded. Add them on the Key Library page.")
+        st.title("Practice" if is_student else "New Check")
+        st.warning(
+            "No practice videos are loaded yet. Check with your instructor."
+            if is_student else
+            "No reference keys loaded. Add them on the Key Library page."
+        )
         st.stop()
 
     render_stepper(step)
+    themes = load_training_items().get("video_themes", {})
 
     # ---------------------------------------------------------------- STEP 0
     if step == 0:
-        st.title("Load a student's file")
-        st.caption("Drop the Observer XT export. The answer key is matched automatically.")
+        if is_student:
+            st.title("Upload your file")
+            st.caption(
+                "Drop your Observer XT export. It is checked against the answer key so you "
+                "can see where to improve — you never see the key itself."
+            )
+        else:
+            st.title("Load a student's file")
+            st.caption("Drop the Observer XT export. The answer key is matched automatically.")
 
-        uploaded = st.file_uploader(
-            "Upload the student's Observer export (.xlsx)", type=["xlsx"]
-        )
+        uploaded = st.file_uploader("Upload the Observer export (.xlsx)", type=["xlsx"])
         if uploaded is None:
-            st.info("Upload a student file to begin.")
+            st.info("Upload a file to begin.")
             st.stop()
 
         if st.session_state.get("uploaded_name") != uploaded.name:
@@ -329,6 +416,9 @@ if page == "New Check":
                 tmp.write(uploaded.getbuffer())
             st.session_state["uploaded_name"] = uploaded.name
             st.session_state["student_path"] = tmp.name
+            # Keep the exact original bytes so a student can download their file back
+            # untouched — every Observer XT column intact, reopens in Observer.
+            st.session_state["uploaded_bytes"] = uploaded.getvalue()
             st.session_state.pop("results", None)
             st.session_state["notes"] = {}
 
@@ -337,6 +427,41 @@ if page == "New Check":
 
         first_utts, suggestions = suggest_references(student_df, grammar, REFERENCE_DIR, top_k=5)
         ordered = suggestions or passports
+
+        # Match-quality gate. Compare the file's first utterances with the best key.
+        best_ref = ordered[0]
+        best_score = score_passport_match(first_utts, best_ref)
+        denom = 2 * min(len(first_utts), len(best_ref.get("first_utterances", [])))
+        quality = (best_score / denom) if denom else 0.0
+
+        def run_check(selected):
+            key_df = read_excel_first_sheet_or_named(
+                REFERENCE_DIR / selected["file_name"], sheet_name=selected.get("sheet_name")
+            )
+            issues, student_utts, key_utts, alignment = compare_files_with_alignment(
+                student_df, key_df, grammar
+            )
+            st.session_state["results"] = (issues, student_utts, key_utts, alignment)
+            st.session_state["selected_ref"] = selected
+            st.session_state["notes"] = {}
+            goto(1)
+
+        if is_student:
+            # A file that matches no key opens nothing: the keys are a serious
+            # research instrument and must not be handed to arbitrary uploads.
+            if quality < MATCH_THRESHOLD:
+                st.error(
+                    "This file doesn't match any of the training videos closely enough to check. "
+                    "Make sure you uploaded the right Observer export for your assigned video, "
+                    "then try again."
+                )
+                st.stop()
+            st.success("File recognized. Ready to check.")
+            if st.button("Run check  ›", type="primary"):
+                run_check(best_ref)
+            st.stop()
+
+        # Teacher: full visibility, may override the matched key.
         labels = [
             f"{p.get('display_name', p.get('id'))} ({p.get('utterance_count')} utterances)"
             for p in ordered
@@ -360,15 +485,7 @@ if page == "New Check":
                 st.write(f"- {u}")
 
         if st.button("Run check  ›", type="primary"):
-            key_df = read_excel_first_sheet_or_named(
-                REFERENCE_DIR / selected["file_name"], sheet_name=selected.get("sheet_name")
-            )
-            issues, student_utts, key_utts, alignment = compare_files_with_alignment(
-                student_df, key_df, grammar
-            )
-            st.session_state["results"] = (issues, student_utts, key_utts, alignment)
-            st.session_state["notes"] = {}
-            goto(1)
+            run_check(selected)
         st.stop()
 
     # ------------------------------------------------- shared for steps 1-3
@@ -376,12 +493,17 @@ if page == "New Check":
     if not results:
         goto(0)
     issues, student_utts, key_utts, alignment = results
+    selected_ref = st.session_state.get("selected_ref", {})
+    _m = _re.search(r"(\d+)", selected_ref.get("file_name", "") or "")
+    vnum = int(_m.group(1)) if _m else None
+    video_theme = themes.get(str(vnum), "")
 
     scores_rows = build_scores_rows(student_utts, key_utts, alignment, issues, grammar)
     category_cols = [label for _, label in ce.SCORES_COLUMN_ORDER]
     total_cells = len(scores_rows) * len(category_cols)
     matched = sum(r[c] for r in scores_rows for c in category_cols)
     match_pct = matched / total_cells if total_cells else 0
+    scores_df = pd.DataFrame(scores_rows)
 
     issues_by_utt = {}
     for i in issues:
@@ -390,10 +512,22 @@ if page == "New Check":
     missing_utts = [i for i in issues if i.kind == "missing_utterance"]
     student_name = Path(st.session_state.get("uploaded_name", "student")).stem
 
+    # Errors per trainable category (bank name -> count), for the Training step.
+    if scores_rows:
+        cat_errors_bank = {b: int((scores_df[label] == 0).sum()) for b, label in TRAINABLE.items()}
+    else:
+        cat_errors_bank = {b: 0 for b in TRAINABLE}
+    ranked_banks = [b for b, _ in sorted(cat_errors_bank.items(), key=lambda kv: kv[1], reverse=True)
+                    if cat_errors_bank[b] > 0][:3]
+
     # ---------------------------------------------------------------- STEP 1
     if step == 1:
-        st.title(f"Results — {student_name}")
-        st.caption("What went wrong, at a glance. Details are one click away in Review.")
+        title = "Your results" if is_student else f"Results — {student_name}"
+        st.title(title)
+        if is_student and video_theme:
+            st.caption(f"Video: {video_theme}. A quick look at how your coding compares with the key.")
+        else:
+            st.caption("What went wrong, at a glance. Details are one click away in Review.")
 
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Utterances", len(student_utts))
@@ -402,7 +536,6 @@ if page == "New Check":
         c4.metric("Agreement", f"{match_pct:.0%}", help="Coding cells that agree with the key")
 
         st.markdown("##### Errors by category")
-        scores_df = pd.DataFrame(scores_rows)
         cat_errors = {c: int((scores_df[c] == 0).sum()) for c in category_cols} if scores_rows else {}
         max_err = max(cat_errors.values()) if cat_errors and max(cat_errors.values()) else 1
         bars = ""
@@ -418,14 +551,72 @@ if page == "New Check":
 
         st.markdown("")
         b1, b2 = st.columns([1, 1])
-        if b1.button("Review flagged utterances  ›", type="primary"):
+        review_label = "See what to fix  ›" if is_student else "Review flagged utterances  ›"
+        if b1.button(review_label, type="primary"):
             goto(2)
-        if b2.button("‹  Back to upload"):
-            goto(0)
+        if b2.button("‹  Start over" if is_student else "‹  Back to upload"):
+            reset_flow() if is_student else goto(0)
         st.stop()
 
     # ---------------------------------------------------------------- STEP 2
     if step == 2:
+        # -------------------------------------------------- STUDENT REVIEW
+        if is_student:
+            st.title("What to fix")
+            st.caption(
+                "These are the utterances where your coding differs from the key. You're shown "
+                "which category to re-check — not the answer. Rewatch, rethink, then fix it in "
+                "Observer and run the check again."
+            )
+            flagged = [u for u in student_utts if issues_by_utt.get(u.uid)]
+
+            if not flagged and not missing_utts:
+                st.success("No differences from the key. Excellent work!")
+            else:
+                st.markdown(f"**{len(flagged)} of your utterances** need another look.")
+                for utt in flagged:
+                    cats = sorted({issue_category(i) for i in issues_by_utt[utt.uid]})
+                    text = utt.utterance_text or "no transcript"
+                    with st.container(border=True):
+                        st.markdown(f'**Utterance {utt.uid:02d}** — "{text}"')
+                        chips = "".join(
+                            f'<span class="flagcard" style="display:inline-block;margin:3px 6px 3px 0;">'
+                            f'<span class="cat">{c}</span></span>' for c in cats
+                        )
+                        st.markdown("Re-check: " + chips, unsafe_allow_html=True)
+
+                if missing_utts:
+                    st.info(
+                        f"{len(missing_utts)} utterance(s) in the key were not coded in your file. "
+                        "Rewatch the video and check whether you missed any utterances."
+                    )
+
+            st.markdown("---")
+            st.markdown("##### Continue working in Observer")
+            st.caption(
+                "Download your file to keep working in Observer XT — every original column is "
+                "preserved, so it reopens exactly where you left off. Fix the flagged utterances, "
+                "export again, and re-run the check."
+            )
+            st.download_button(
+                "⬇  Download my file",
+                data=st.session_state.get("uploaded_bytes", b""),
+                file_name=st.session_state.get("uploaded_name", "my_file.xlsx"),
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+            )
+
+            st.markdown("")
+            c1, c2, c3 = st.columns(3)
+            if c1.button("Practice these areas  ›", type="primary"):
+                goto(3)
+            if c2.button("‹  Back to results"):
+                goto(1)
+            if c3.button("Start over"):
+                reset_flow()
+            st.stop()
+
+        # -------------------------------------------------- TEACHER REVIEW
         st.title(f"Review — {student_name}")
 
         notes = st.session_state.setdefault("notes", {})
@@ -499,13 +690,42 @@ if page == "New Check":
             "Totals and percentages are live Excel formulas — edit a cell and they recalculate."
         )
 
-        c1, c2 = st.columns([1, 1])
-        if c1.button("Check next student  ›"):
-            for k in ("results", "notes", "uploaded_name", "student_path"):
-                st.session_state.pop(k, None)
-            goto(0)
-        if c2.button("‹  Back to summary"):
+        c1, c2, c3 = st.columns(3)
+        if c1.button("Practice weak areas  ›", type="primary"):
+            goto(3)
+        if c2.button("Check next student"):
+            reset_flow()
+        if c3.button("‹  Back to summary"):
             goto(1)
+        st.stop()
+
+    # ---------------------------------------------------------------- STEP 3
+    if step == 3:
+        ti = load_training_items()
+        st.title("Training")
+        if video_theme:
+            st.caption(f"Targeted practice for {video_theme}, focused on your weakest categories.")
+        else:
+            st.caption("Targeted practice focused on the weakest categories in this file.")
+
+        if not ranked_banks:
+            st.success("No errors in the trainable categories — nothing to practice. Great work!")
+        else:
+            tabs = st.tabs([f"{b} ({cat_errors_bank[b]})" for b in ranked_banks])
+            for tab, bank in zip(tabs, ranked_banks):
+                with tab:
+                    items = [x for x in ti["items"] if x["video"] == vnum and x["category"] == bank]
+                    if not items:
+                        st.info("No practice items for this category and video yet.")
+                    for i, item in enumerate(items, 1):
+                        render_training_item(item, i)
+
+        st.markdown("---")
+        c1, c2 = st.columns(2)
+        if c1.button("‹  Back to review"):
+            goto(2)
+        if c2.button("Start over" if is_student else "Check next student"):
+            reset_flow()
         st.stop()
 
 
@@ -548,118 +768,21 @@ elif page == "Key Library":
 
 
 elif page == "Training":
+    # Teacher-only free practice. Students never reach this page — their practice
+    # is the Training step of the wizard, scoped to their own video and errors.
     ti = load_training_items()
     themes = ti.get("video_themes", {})
     st.title("Training")
-
-    # ---------------------------------------------------------- TEACHER MODE
-    if ROLE == "teacher":
-        st.caption("Practice any video and category, independent of any student's errors.")
-        vnum = st.selectbox(
-            "Video", [1, 2, 3, 4],
-            format_func=lambda v: f"Video {v} — {themes.get(str(v), '')}",
-        )
-        cat = st.selectbox("Category", list(TRAINABLE.keys()))
-        items = [x for x in ti["items"] if x["video"] == vnum and x["category"] == cat]
-        st.markdown(f"##### {cat} — {len(items)} items")
-        for i, item in enumerate(items, 1):
-            render_training_item(item, i)
-        st.stop()
-
-    # ---------------------------------------------------------- STUDENT MODE
-    st.caption("Upload your Observer XT export. You'll see your scores and get practice on your weakest areas.")
-    uploaded = st.file_uploader("Upload your Observer export (.xlsx)", type=["xlsx"])
-    if uploaded is None:
-        st.info("Upload your file to begin.")
-        st.stop()
-
-    if st.session_state.get("tr_name") != uploaded.name:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
-            tmp.write(uploaded.getbuffer())
-        st.session_state["tr_name"] = uploaded.name
-        st.session_state["tr_path"] = tmp.name
-
-    student_df = pd.read_excel(st.session_state["tr_path"])
-    passports = load_reference_passports(REFERENCE_DIR)
-    _first, suggestions = suggest_references(student_df, grammar, REFERENCE_DIR, top_k=5)
-    ordered = suggestions or passports
-    if not ordered:
-        st.error("Could not match your file to a training video. Check with your instructor.")
-        st.stop()
-
-    selected = ordered[0]
-    m = _re.search(r"(\d+)", selected.get("file_name", ""))
-    vnum = int(m.group(1)) if m else None
-    st.markdown(f"**Video:** {themes.get(str(vnum), 'unknown')}")
-
-    # Hooks into the existing engine: same comparison, scoring and error counting
-    # used by the teacher's New Check — students just never see the key itself.
-    key_df = read_excel_first_sheet_or_named(
-        REFERENCE_DIR / selected["file_name"], sheet_name=selected.get("sheet_name")
+    st.caption("Practice any video and category, independent of any student's errors.")
+    vnum = st.selectbox(
+        "Video", [1, 2, 3, 4],
+        format_func=lambda v: f"Video {v} — {themes.get(str(v), '')}",
     )
-    issues, su, ku, al = compare_files_with_alignment(student_df, key_df, grammar)
-    scores_rows = build_scores_rows(su, ku, al, issues, grammar)
-    category_cols = [label for _, label in ce.SCORES_COLUMN_ORDER]
-    scores_df = pd.DataFrame(scores_rows)
-    total_cells = len(scores_rows) * len(category_cols)
-    matched = int(scores_df[category_cols].values.sum()) if scores_rows else 0
-    match_pct = matched / total_cells if total_cells else 0
-
-    issues_by_utt = {}
-    for i in issues:
-        if i.utterance_id is not None:
-            issues_by_utt.setdefault(i.utterance_id, []).append(i)
-
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Utterances", len(su))
-    c2.metric("With issues", len(issues_by_utt))
-    c3.metric("Agreement", f"{match_pct:.0%}")
-
-    cat_errors = (
-        {bank: int((scores_df[label] == 0).sum()) for bank, label in TRAINABLE.items()}
-        if scores_rows else {b: 0 for b in TRAINABLE}
-    )
-    max_err = max(cat_errors.values()) if cat_errors and max(cat_errors.values()) else 1
-    st.markdown("##### Your errors by category")
-    bars = ""
-    for bank in TRAINABLE:
-        n = cat_errors.get(bank, 0)
-        width = int(n / max_err * 100) if n else 100
-        klass = "fill" if n else "fill ok"
-        bars += (
-            f'<div class="catbar"><span>{bank}</span>'
-            f'<div class="track"><div class="{klass}" style="width:{width}%"></div></div>'
-            f'<span class="cat-n">{n}</span></div>'
-        )
-    st.markdown(bars, unsafe_allow_html=True)
-
-    with st.expander("Your flagged utterances and feedback"):
-        any_flag = False
-        for utt in su:
-            ui = issues_by_utt.get(utt.uid, [])
-            if not ui:
-                continue
-            any_flag = True
-            st.markdown(f'**"{utt.utterance_text or "no transcript"}"**')
-            st.markdown(_flag_html(ui), unsafe_allow_html=True)
-        if not any_flag:
-            st.write("No issues flagged.")
-
-    st.markdown("##### Practice your top areas")
-    ranked = [b for b, _ in sorted(cat_errors.items(), key=lambda kv: kv[1], reverse=True)
-              if cat_errors[b] > 0][:3]
-    if not ranked:
-        st.success("No errors in the trainable categories — nothing to practice. Great work!")
-        st.stop()
-
-    tabs = st.tabs([f"{b} ({cat_errors[b]})" for b in ranked])
-    for tab, bank in zip(tabs, ranked):
-        with tab:
-            items = [x for x in ti["items"] if x["video"] == vnum and x["category"] == bank]
-            if not items:
-                st.info("No practice items for this category and video yet.")
-            for i, item in enumerate(items, 1):
-                render_training_item(item, i)
+    cat = st.selectbox("Category", list(TRAINABLE.keys()))
+    items = [x for x in ti["items"] if x["video"] == vnum and x["category"] == cat]
+    st.markdown(f"##### {cat} — {len(items)} items")
+    for i, item in enumerate(items, 1):
+        render_training_item(item, i)
 
 
 elif page == "Item Bank":
@@ -673,6 +796,8 @@ elif page == "Item Bank":
         ans = x["answer"]
         if isinstance(ans, dict):
             ans = " | ".join(f"{k}={v}" for k, v in ans.items())
+        elif isinstance(ans, list):
+            ans = ", ".join(ans)
         rows.append({
             "Video": f'{x["video"]} — {themes.get(str(x["video"]), "")}',
             "Category": x["category"],

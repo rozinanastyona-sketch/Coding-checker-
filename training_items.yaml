@@ -39,11 +39,18 @@ items:
 - video: 1
   category: Listing
   n: 4
-  utterance: DIRTY CORN
-  rationale: Two different parts of speech (adjective + noun). More than one part of speech disqualifies
-    it as a simple list.
-  ref: Listing / "...or it contains more than one part of speech"
-  answer: Listing Not Present
+  mode: modifiers
+  utterance: HIPPO DOG HORSE CORN
+  rationale: >-
+    Four nouns in a row is a simple list, so Listing is present. When Listing is present the set of
+    codes changes: code only Number of Symbols, Number of Relevant Symbols, and Parts of Speech. Word
+    Order, SV, Inflectional Morphemes and Grammatical Intent are not coded for a simple list.
+  ref: Listing / "When Listing is present, code only Number of Symbols, Number of Relevant Symbols,
+    and Parts of Speech"
+  answer:
+  - Number of Symbols
+  - Number of Relevant Symbols
+  - Parts of Speech
 - video: 1
   category: Word Order
   n: 1
@@ -78,8 +85,9 @@ items:
   category: SV
   n: 1
   utterance: DOG IS EAT -ING CORN
-  rationale: IS is an auxiliary here, so it is a non-lexical verb AND there is a lexical main verb (EAT).
-    Singular DOG + IS agree. USV = subject + lexical verb only; ignore the rest.
+  rationale: >-
+    IS is an auxiliary verb here, so it is a non-lexical verb, while EAT is the lexical main verb. The
+    singular subject DOG agrees with IS. For USV, enter only the subject and the lexical verb: DOG EAT.
   ref: SV / Lexical vs Non-lexical; USV coding; SV Agreement
   answer:
     SV Present: 'YES'
@@ -259,10 +267,18 @@ items:
 - video: 2
   category: Listing
   n: 4
-  utterance: BIG BASKET
-  rationale: Adjective + noun = more than one part of speech, so not a simple list.
-  ref: Listing / "...or it contains more than one part of speech"
-  answer: Listing Not Present
+  mode: modifiers
+  utterance: PIZZA MILK EGG BREAD
+  rationale: >-
+    Four nouns of the same part of speech is a simple list, so Listing is present. That changes the
+    coding set: code only Number of Symbols, Number of Relevant Symbols, and Parts of Speech. Do not
+    code Word Order, SV, Inflectional Morphemes or Grammatical Intent for a simple list.
+  ref: Listing / "When Listing is present, code only Number of Symbols, Number of Relevant Symbols,
+    and Parts of Speech"
+  answer:
+  - Number of Symbols
+  - Number of Relevant Symbols
+  - Parts of Speech
 - video: 2
   category: Word Order
   n: 1
@@ -287,16 +303,21 @@ items:
 - video: 2
   category: Word Order
   n: 4
-  utterance: BASKET
-  rationale: Single-symbol utterances are scored 1.0 (the only exception is a bound morpheme used alone).
-  ref: Word Order Score / Single symbol utterances
+  utterance: PIZZA MILK
+  rationale: >-
+    Two symbols of the same part of speech (two nouns) by themselves score 1.0, per the rule "if the
+    child provides 2 nouns/pronouns, verbs, prepositions or adjectives by themselves, score this as a
+    1." Note this is a Word Order score of 1.0 even though, as a bare list, its grammatical intent
+    would be coded NOT clear — the two codes come apart.
+  ref: Word Order Score / Two symbols of the same part of speech
   answer: '1.0'
 - video: 2
   category: SV
   n: 1
   utterance: I AM BUY -ING PIZZA
-  rationale: AM is auxiliary (non-lexical), BUY is the lexical main verb. I + AM agree. USV ignores everything
-    but subject and lexical verb.
+  rationale: >-
+    AM is an auxiliary verb here, so it is a non-lexical verb, while BUY is the lexical main verb. The
+    subject I agrees with AM. For USV, enter only the subject and the lexical verb: I BUY.
   ref: SV / Lexical vs Non-lexical; USV coding
   answer:
     SV Present: 'YES'
@@ -469,10 +490,18 @@ items:
 - video: 3
   category: Listing
   n: 4
-  utterance: BLUE CUP
-  rationale: Adjective + noun = more than one part of speech.
-  ref: Listing / "...or it contains more than one part of speech"
-  answer: Listing Not Present
+  mode: modifiers
+  utterance: CAKE JUICE CUP BALLOON
+  rationale: >-
+    Four nouns in a row is a simple list, so Listing is present. When Listing is present, only three
+    categories are coded: Number of Symbols, Number of Relevant Symbols, and Parts of Speech. Word
+    Order, SV, Inflectional Morphemes and Grammatical Intent are left uncoded for a simple list.
+  ref: Listing / "When Listing is present, code only Number of Symbols, Number of Relevant Symbols,
+    and Parts of Speech"
+  answer:
+  - Number of Symbols
+  - Number of Relevant Symbols
+  - Parts of Speech
 - video: 3
   category: Word Order
   n: 1
@@ -498,15 +527,22 @@ items:
 - video: 3
   category: Word Order
   n: 4
-  utterance: CUP
-  rationale: Single-symbol utterance. Scored 1.0 because it is a real symbol, not a bound morpheme.
-  ref: Word Order Score / Single symbol utterances
+  utterance: EAT DRINK
+  rationale: >-
+    Two symbols of the same part of speech (two verbs) by themselves score 1.0, per the rule "if the
+    child provides 2 nouns/pronouns, verbs, prepositions or adjectives by themselves, score this as a
+    1." The same utterance would be coded Grammatical Intent NOT clear as a bare list of verbs — word
+    order and grammatical intent are scored independently.
+  ref: Word Order Score / Two symbols of the same part of speech
   answer: '1.0'
 - video: 3
   category: SV
   n: 1
   utterance: I AM DRINK -ING JUICE
-  rationale: AM is auxiliary, DRINK is the lexical main verb, I + AM agree. Note the USV drops the -ING.
+  rationale: >-
+    AM is an auxiliary verb here, so it is a non-lexical verb, while DRINK is the lexical main verb. The
+    subject I agrees with AM. For USV, enter only the subject and the lexical verb, dropping the -ING:
+    I DRINK.
   ref: SV / USV coding ("MONKEY IS WASHING CAR -> MONKEY WASH")
   answer:
     SV Present: 'YES'
@@ -679,10 +715,18 @@ items:
 - video: 4
   category: Listing
   n: 4
-  utterance: SICK DUCK
-  rationale: Adjective + noun = more than one part of speech.
-  ref: Listing / "...or it contains more than one part of speech"
-  answer: Listing Not Present
+  mode: modifiers
+  utterance: SHOT BANDAID MEDICINE PILL
+  rationale: >-
+    Four nouns of the same part of speech is a simple list, so Listing is present. The coding set then
+    narrows: code only Number of Symbols, Number of Relevant Symbols, and Parts of Speech. Word Order,
+    SV, Inflectional Morphemes and Grammatical Intent are not coded for a simple list.
+  ref: Listing / "When Listing is present, code only Number of Symbols, Number of Relevant Symbols,
+    and Parts of Speech"
+  answer:
+  - Number of Symbols
+  - Number of Relevant Symbols
+  - Parts of Speech
 - video: 4
   category: Word Order
   n: 1
@@ -715,7 +759,9 @@ items:
   category: SV
   n: 1
   utterance: YOU ARE CHECK -ING HEART
-  rationale: ARE is auxiliary, CHECK is the lexical main verb, YOU + ARE agree.
+  rationale: >-
+    ARE is an auxiliary verb here, so it is a non-lexical verb, while CHECK is the lexical main verb. The
+    subject YOU agrees with ARE. For USV, enter only the subject and the lexical verb: YOU CHECK.
   ref: SV / Lexical vs Non-lexical; SV Agreement examples
   answer:
     SV Present: 'YES'
