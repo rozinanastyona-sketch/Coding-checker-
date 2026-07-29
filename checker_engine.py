@@ -1379,3 +1379,46 @@ def write_annotated_excel(
         write_scores_sheet(wb, scores_rows)
 
     wb.save(output_path)
+
+
+def write_student_reference_excel(
+    student_input_path: str | Path,
+    output_path: str | Path,
+    grammar: Dict[str, Any],
+    categories_by_row: Dict[int, List[str]],
+) -> None:
+    """A student's 'feedback copy' — a reference, never for re-import.
+
+    Unlike write_annotated_excel this keeps EVERY original column, inserts no
+    rows and adds no columns, so it stays a faithful picture of the student's
+    own file. Rows where the coding differs from the key are shaded red and the
+    Behavior cell gets a hover comment naming only the CATEGORY to re-check —
+    never the key's value, never a missing utterance's transcript. The student
+    reads this alongside Observer while fixing their own coding; the clean
+    working file is downloaded separately for Observer itself.
+
+    categories_by_row maps a student DataFrame row index (0-based, so Excel row
+    = index + 2) to the sorted category labels flagged on that row.
+    """
+    wb = load_workbook(student_input_path)
+    ws = wb.active
+
+    header = [cell.value for cell in ws[1]]
+    header_map = {str(v).strip(): i + 1 for i, v in enumerate(header) if v is not None}
+    behavior_col = header_map.get("Behavior") or 1
+
+    red = PatternFill("solid", fgColor=grammar["colors"]["error"])
+    for row_index, cats in categories_by_row.items():
+        excel_row = row_index + 2
+        if excel_row < 2 or excel_row > ws.max_row:
+            continue
+        for col in range(1, ws.max_column + 1):
+            ws.cell(row=excel_row, column=col).fill = red
+        cell = ws.cell(row=excel_row, column=behavior_col)
+        body = "Re-check this utterance for: " + ", ".join(cats)
+        c = CellComment(body, "Coding Checker")
+        c.width = 300
+        c.height = 90
+        cell.comment = c
+
+    wb.save(output_path)

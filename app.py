@@ -27,6 +27,7 @@ from checker_engine import (
     score_passport_match,
     suggest_references,
     write_annotated_excel,
+    write_student_reference_excel,
 )
 
 ROOT = Path(__file__).parent
@@ -592,19 +593,55 @@ if page == "New Check":
                     )
 
             st.markdown("---")
-            st.markdown("##### Continue working in Observer")
-            st.caption(
-                "Download your file to keep working in Observer XT — every original column is "
-                "preserved, so it reopens exactly where you left off. Fix the flagged utterances, "
-                "export again, and re-run the check."
-            )
-            st.download_button(
-                "⬇  Download my file",
-                data=st.session_state.get("uploaded_bytes", b""),
-                file_name=st.session_state.get("uploaded_name", "my_file.xlsx"),
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                type="primary",
-            )
+            st.markdown("##### Take your file back to Observer")
+
+            # Category flagged per DataFrame row — no key values, so the feedback
+            # copy stays answer-free. Built from the same issues shown above.
+            categories_by_row = {}
+            for i in issues:
+                if i.row_index is not None:
+                    categories_by_row.setdefault(i.row_index, set()).add(issue_category(i))
+            categories_by_row = {r: sorted(c) for r, c in categories_by_row.items()}
+
+            base = Path(st.session_state.get("uploaded_name", "my_file.xlsx")).stem
+            ref_path = Path(tempfile.gettempdir()) / f"{base}_feedback.xlsx"
+            try:
+                write_student_reference_excel(
+                    Path(st.session_state["student_path"]), ref_path, grammar, categories_by_row
+                )
+                ref_bytes = ref_path.read_bytes()
+            except Exception:
+                ref_bytes = None
+
+            dl1, dl2 = st.columns(2)
+            with dl1:
+                st.markdown("**Working file**")
+                st.caption(
+                    "Your original file, unchanged — every Observer XT column intact. "
+                    "This is the one you keep working from."
+                )
+                st.download_button(
+                    "⬇  Download working file",
+                    data=st.session_state.get("uploaded_bytes", b""),
+                    file_name=st.session_state.get("uploaded_name", "my_file.xlsx"),
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    type="primary",
+                )
+            with dl2:
+                st.markdown("**Feedback copy** · reference only")
+                st.caption(
+                    "A read-only copy with the utterances to re-check shaded red and a hover note "
+                    "naming the category (no answers). Open it beside Observer — don't import it."
+                )
+                if ref_bytes is not None:
+                    st.download_button(
+                        "⬇  Download feedback copy",
+                        data=ref_bytes,
+                        file_name=ref_path.name,
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                else:
+                    st.caption("_(Feedback copy unavailable for this file.)_")
 
             st.markdown("")
             c1, c2, c3 = st.columns(3)
