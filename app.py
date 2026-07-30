@@ -127,9 +127,16 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
     """
     labels = ["Upload", "Summary", "Review", "Training"]
     css = [
-        # The chip itself.
+        # One flex row instead of columns: columns gave every chip its own equal-width
+        # box, which stretched the chips and let the separate arrows drift out of line.
+        # Here each chip and its arrow share one vertically-centred flex line.
+        '.st-key-stepbar [data-testid="stVerticalBlock"]{'
+        "flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap;}",
+        'div[class*="st-key-stepper_"]{'
+        "display:flex;align-items:center;gap:10px;width:auto!important;flex:0 0 auto;}",
+        # The chip itself, sized to its own label like the original inline chips.
         'div[class*="st-key-stepper_"] button{'
-        "display:flex;align-items:center;justify-content:center;gap:8px;width:100%;"
+        "display:flex;align-items:center;justify-content:center;gap:8px;width:auto;"
         "color:var(--muted);background:#2b3038;border:none!important;"
         "padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;"
         "line-height:1.2;min-height:0;transition:.15s;white-space:nowrap;}",
@@ -139,7 +146,16 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
         "display:grid;place-items:center;font-size:12px;flex:none;}",
         'div[class*="st-key-stepper_"] button:disabled{opacity:.45;cursor:not-allowed;}',
         'div[class*="st-key-stepper_"] button:hover:not(:disabled){filter:brightness(1.18);}',
+        # No focus ring: it left a stray outline around whichever chip was clicked.
+        'div[class*="st-key-stepper_"] button:focus,'
+        'div[class*="st-key-stepper_"] button:focus-visible,'
+        'div[class*="st-key-stepper_"] button:active{'
+        "outline:none!important;box-shadow:none!important;border:none!important;}",
         'div[class*="st-key-stepper_"] button p{margin:0;}',
+        # The arrow rides in the chip's own flex line, so it cannot fall out of line.
+        'div[class*="st-key-stepper_"]::after{'
+        'content:"\\203A";color:#556074;font-size:20px;font-weight:600;line-height:1;}',
+        'div[class*="st-key-stepper_3"]::after{content:none;}',
     ]
     for i in range(len(labels)):
         sel = f'div[class*="st-key-stepper_{i}"] button'
@@ -153,37 +169,12 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
             css.append(f'{sel}::before{{content:"{i + 1}";}}')
     st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
 
-    # Column widths follow the label lengths so each chip is about as wide as its
-    # own text, the way the inline chips used to be. Equal columns stretched every
-    # chip to the same width and left uneven gaps around the arrows.
-    widths, arrow_cols = [], []
-    for i, lab in enumerate(labels):
-        widths.append(len(lab) + 4.0)
-        if i < len(labels) - 1:
-            widths.append(1.6)  # arrow
-    widths.append(30.0)  # spacer, so the chips stay left and don't stretch
-    cols = st.columns(widths, vertical_alignment="center")
-    for i, lab in enumerate(labels):
-        with cols[i * 2]:
-            if st.button(
-                lab, key=f"stepper_{i}", disabled=i > unlocked, use_container_width=True
-            ):
+    with st.container(key="stepbar"):
+        for i, lab in enumerate(labels):
+            if st.button(lab, key=f"stepper_{i}", disabled=i > unlocked):
                 st.session_state["step"] = i
                 st.rerun()
-        if i < len(labels) - 1:
-            arrow_cols.append(cols[i * 2 + 1])
-    for col in arrow_cols:
-        # Sized and line-height-matched to the chip so it sits level with them
-        # instead of looking like a stray small character between big buttons.
-        # The "›" glyph is small inside its em box, so it needs a much larger
-        # font-size and some weight to carry the same visual weight as the chips.
-        col.markdown(
-            '<div style="display:flex;align-items:center;justify-content:center;'
-            'height:38px;color:#6b7689;font-size:38px;font-weight:700;'
-            'line-height:1;">&rsaquo;</div>',
-            unsafe_allow_html=True,
-        )
-    st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
+    st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
