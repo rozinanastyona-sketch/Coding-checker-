@@ -132,7 +132,7 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
         "display:flex;align-items:center;justify-content:center;gap:8px;width:100%;"
         "color:var(--muted);background:#2b3038;border:none!important;"
         "padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;"
-        "line-height:1.2;min-height:0;transition:.15s;}",
+        "line-height:1.2;min-height:0;transition:.15s;white-space:nowrap;}",
         # The round number badge, drawn in front of the label.
         'div[class*="st-key-stepper_"] button::before{'
         "width:22px;height:22px;border-radius:50%;background:#3a414d;color:inherit;"
@@ -153,13 +153,15 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
             css.append(f'{sel}::before{{content:"{i + 1}";}}')
     st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
 
-    # Narrow columns keep the chips compact, with the same "›" between them.
+    # Column widths follow the label lengths so each chip is about as wide as its
+    # own text, the way the inline chips used to be. Equal columns stretched every
+    # chip to the same width and left uneven gaps around the arrows.
     widths, arrow_cols = [], []
-    for i in range(len(labels)):
-        widths.append(1.0)
+    for i, lab in enumerate(labels):
+        widths.append(len(lab) + 4.0)
         if i < len(labels) - 1:
-            widths.append(0.12)
-    widths.append(2.6)  # spacer, so the chips don't stretch across the page
+            widths.append(1.6)  # arrow
+    widths.append(30.0)  # spacer, so the chips stay left and don't stretch
     cols = st.columns(widths, vertical_alignment="center")
     for i, lab in enumerate(labels):
         with cols[i * 2]:
@@ -174,8 +176,8 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
         # Sized and line-height-matched to the chip so it sits level with them
         # instead of looking like a stray small character between big buttons.
         col.markdown(
-            '<div style="text-align:center;color:#556074;font-size:22px;'
-            'line-height:34px;margin:0;">&rsaquo;</div>',
+            '<div style="display:flex;align-items:center;justify-content:center;'
+            'height:38px;color:#556074;font-size:24px;line-height:1;">&rsaquo;</div>',
             unsafe_allow_html=True,
         )
     st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
