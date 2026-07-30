@@ -257,18 +257,35 @@ def norm(value: Any) -> str:
     return re.sub(r"\s+", " ", clean_text(value)).strip()
 
 
+def squash(value: Any) -> str:
+    """Lower-cased with every space removed, for whitespace-proof matching.
+
+    Observer ethograms are typed by hand, so the same behaviour appears as
+    "Listing is present: 3+ symbols..." in one project and
+    "Listing is Present: 3+symbols..." in another. norm() collapses runs of
+    whitespace but cannot bridge a space that is simply absent, and that one
+    character was enough to make a coded row look uncoded.
+    """
+    return re.sub(r"\s+", "", clean_text(value)).lower()
+
+
 def build_alias_map(grammar: Dict[str, Any]) -> Dict[str, str]:
+    """Map every known spelling of a behaviour to its canonical name.
+
+    Each name is registered twice: normalised (spaces collapsed) and squashed
+    (spaces removed), so a missing or extra space still resolves.
+    """
     alias_to_canonical = {}
     for canonical, aliases in grammar.get("aliases", {}).items():
-        alias_to_canonical[norm(canonical).lower()] = canonical
-        for alias in aliases or []:
-            alias_to_canonical[norm(alias).lower()] = canonical
+        for name in [canonical] + list(aliases or []):
+            alias_to_canonical[norm(name).lower()] = canonical
+            alias_to_canonical.setdefault(squash(name), canonical)
     return alias_to_canonical
 
 
 def canonicalize(value: Any, alias_map: Dict[str, str]) -> str:
     v = norm(value)
-    return alias_map.get(v.lower(), v)
+    return alias_map.get(v.lower()) or alias_map.get(squash(v)) or v
 
 
 def behavior_key(value: Any) -> str:
