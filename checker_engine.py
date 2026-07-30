@@ -792,10 +792,15 @@ def _match_text(s: str) -> str:
 def _text_similarity(a: str, b: str, a_partial: bool = False, b_partial: bool = False) -> float:
     from difflib import SequenceMatcher
     na, nb = _match_text(a), _match_text(b)
-    if not na and not nb:
-        return 0.5  # both untranscribed: weak evidence, allow positional matching
     if not na or not nb:
-        return 0.0
+        # One or both sides untranscribed. In this ethogram the transcript lives on
+        # the Communicative Intent row, so a coder who forgets that one row loses the
+        # utterance's text entirely. Scoring 0 made such an utterance unmatchable and
+        # it was reported as a missing plus an extra utterance instead of the far more
+        # useful "Communicative Intent is not coded here". 0.5 sits just below
+        # min_similarity, so it never outranks a real text match: it only ties with
+        # two gaps, and the tie resolves to the diagonal, i.e. matching by position.
+        return 0.5
     ratio = SequenceMatcher(None, na, nb).ratio()
     # A 'USV: ...' note records only the subject-verb combination, not the
     # full transcript. If the partial side's words all appear (in order) in
@@ -854,7 +859,16 @@ def align_utterances(
             left = score[i][j - 1] + GAP
             best = max(diag, up, left)
             score[i][j] = best
-            move[i][j] = "d" if best == diag else ("u" if best == up else "l")
+            # Prefer the diagonal on a tie, so an utterance that cannot be matched
+            # on text alone still pairs up by position instead of being split into a
+            # missing plus an extra utterance. Compared with a tolerance because the
+            # scores are sums of floats and an exact tie rarely compares equal.
+            if diag >= best - 1e-9:
+                move[i][j] = "d"
+            elif up >= best - 1e-9:
+                move[i][j] = "u"
+            else:
+                move[i][j] = "l"
 
     pairs: List[Tuple[Optional[int], Optional[int]]] = []
     i, j = n, m
@@ -862,7 +876,16 @@ def align_utterances(
         mv = move[i][j]
         if mv == "d":
             si, kj = i - 1, j - 1
-            if sims[si][kj] >= min_similarity:
+            # An utterance with no transcript cannot be matched on text, but the
+            # diagonal is only ever taken here when nothing else fits, so pairing by
+            # position is right: the coder forgot the row the transcript lives on
+            # (Communicative Intent), and should be told exactly that rather than be
+            # shown one missing and one extra utterance.
+            untranscribed = not (
+                clean_text(student_utts[si].utterance_text)
+                and clean_text(key_utts[kj].utterance_text)
+            )
+            if sims[si][kj] >= min_similarity or untranscribed:
                 pairs.append((si, kj))
             else:
                 # diagonal was taken as a double-gap: report both as unmatched

@@ -357,25 +357,25 @@ items:
   n: 4
   utterance: HORSE -S PUSH BASKET
   rationale: >-
-    This one has two defensible readings, and both are accepted. Read -S as a contracted copula ("the
-    horse's pushing") and it is a non-lexical verb alongside the lexical verb PUSH. Read -S as a plural
-    marker ("horses push") and there is no 'to be' verb at all, so only the lexical verb PUSH is coded.
-    Either way the sentence is present, PUSH is the lexical verb, and the USV is HORSE PUSH. Subject-Verb
-    Agreement is NOT coded in either reading, because that code applies only when the symbol IS, AM or ARE
-    is present, and a contracted copula does not trigger it.
-  ref: SV / USV coding; SV Agreement / "Only... utterances that contain at least one 'to be' verb"
+    The -S counts both as a plural marker and as a contracted IS, so this utterance has two defensible
+    readings and both are accepted. Read it as a contracted copula ("the horse is pushing") and IS is a
+    non-lexical verb beside the lexical verb PUSH, and the singular subject agrees with IS. Read it as a
+    plural ("horses push") and there is no separate 'to be' verb, and the plural subject agrees with the
+    verb. Either way the sentence is present, PUSH is the lexical verb, Subject-Verb Agreement is YES, and
+    the USV is HORSE PUSH.
+  ref: SV / USV coding; SV Agreement
   answer:
     SV Present: 'YES'
     Lexical Verb: 'YES'
     Non-lexical Verb: 'YES'
-    Subject-Verb Agreement: 'NO'
+    Subject-Verb Agreement: 'YES'
     USV: HORSE PUSH
     Repeated SV: 'NO'
   answer_alt:
   - SV Present: 'YES'
     Lexical Verb: 'YES'
     Non-lexical Verb: 'NO'
-    Subject-Verb Agreement: 'NO'
+    Subject-Verb Agreement: 'YES'
     USV: HORSE PUSH
     Repeated SV: 'NO'
 - video: 2
@@ -813,24 +813,24 @@ items:
   n: 4
   utterance: DUCK -S NEED MEDICINE
   rationale: >-
-    Like HORSE -S PUSH BASKET, this has two defensible readings and both are accepted. Read -S as a
-    contracted copula and it is a non-lexical verb alongside the lexical verb NEED; read it as a plural
-    marker ("ducks need") and there is no 'to be' verb, so only NEED is coded. Either way the sentence is
-    present and the USV is DUCK NEED. Subject-Verb Agreement is not coded in either reading, because the
-    code requires the symbol IS, AM or ARE and none is present.
-  ref: SV / USV coding ("I -S WASH -S BATHTUB -> SV = I WASH"); SV Agreement scope
+    Like HORSE -S PUSH BASKET, the -S counts both as a plural marker and as a contracted IS, so both
+    readings are accepted. As a contracted copula it is a non-lexical verb beside the lexical verb NEED,
+    and the singular subject agrees with IS; as a plural ("ducks need") there is no separate 'to be' verb,
+    and the plural subject agrees with the verb. Either way the sentence is present, Subject-Verb Agreement
+    is YES, and the USV is DUCK NEED.
+  ref: SV / USV coding ("I -S WASH -S BATHTUB -> SV = I WASH"); SV Agreement
   answer:
     SV Present: 'YES'
     Lexical Verb: 'YES'
     Non-lexical Verb: 'YES'
-    Subject-Verb Agreement: 'NO'
+    Subject-Verb Agreement: 'YES'
     USV: DUCK NEED
     Repeated SV: 'NO'
   answer_alt:
   - SV Present: 'YES'
     Lexical Verb: 'YES'
     Non-lexical Verb: 'NO'
-    Subject-Verb Agreement: 'NO'
+    Subject-Verb Agreement: 'YES'
     USV: DUCK NEED
     Repeated SV: 'NO'
 - video: 4
