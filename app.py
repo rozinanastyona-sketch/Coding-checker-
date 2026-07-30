@@ -171,8 +171,11 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
         if i < len(labels) - 1:
             arrow_cols.append(cols[i * 2 + 1])
     for col in arrow_cols:
+        # Sized and line-height-matched to the chip so it sits level with them
+        # instead of looking like a stray small character between big buttons.
         col.markdown(
-            '<div style="text-align:center;color:#556074;font-size:15px">&rsaquo;</div>',
+            '<div style="text-align:center;color:#556074;font-size:22px;'
+            'line-height:34px;margin:0;">&rsaquo;</div>',
             unsafe_allow_html=True,
         )
     st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
