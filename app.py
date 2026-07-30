@@ -218,13 +218,27 @@ LISTING_MOD_OPTIONS = [
 # possible first-utterance match score, or the file is refused and nothing opens.
 # Keys are a serious research instrument, so a non-matching file reveals nothing.
 MATCH_THRESHOLD = 0.5
-# Category prefixes used to label a student's error by category without ever
-# showing the key's value.
-CODING_CATEGORY_PREFIXES = [
-    "Listing", "Communicative Intent", "Imitativeness", "Independence",
-    "Number of Symbols", "Number of Relevant Symbols", "Word Order", "SV",
-    "Parts of Speech", "Inflectional Morphemes", "Grammatical Intent",
-]
+# How a category is named to a student. A message can start with either the
+# grammar's group name ("Imitative", "Independent Aided Utterances" — used by the
+# "not coded" template) or the friendlier wording feedback.yaml uses in its own
+# sentences ("Imitativeness", "Independence"), so both forms are listed and map to
+# one display label. Longest first, so a longer name never loses to a shorter one.
+CATEGORY_ALIASES = {
+    "Listing": "Listing",
+    "Communicative Intent": "Communicative Intent",
+    "Imitative": "Imitativeness",
+    "Imitativeness": "Imitativeness",
+    "Independent Aided Utterances": "Independence",
+    "Independence": "Independence",
+    "Number of Symbols": "Number of Symbols",
+    "Number of Relevant Symbols": "Number of Relevant Symbols",
+    "Word Order": "Word Order",
+    "SV": "SV",
+    "Parts of Speech": "Parts of Speech",
+    "Inflectional Morphemes": "Inflectional Morphemes",
+    "Grammatical Intent": "Grammatical Intent",
+}
+CATEGORY_NEEDLES = sorted(CATEGORY_ALIASES, key=len, reverse=True)
 ITEM_OPTIONS = {
     "Listing": ["Listing Present", "Listing Not Present"],
     "Word Order": ["1.0", "0.5", "0"],
@@ -350,16 +364,12 @@ def issue_category(issue):
     if cat:
         return cat
     msg = issue.message or ""
-    # Wrong-value messages read "<Category> - key: X, you coded: Y".
-    prefix = msg.split(" - ")[0].strip()
-    for c in CODING_CATEGORY_PREFIXES:
-        if prefix == c:
-            return c
-    # "missing_row" messages read "<Category> is not coded for this utterance. Key: X"
-    # — no " - " separator, so match the leading category name instead.
-    for c in CODING_CATEGORY_PREFIXES:
-        if msg.startswith(c):
-            return c
+    # Both "<Category> - key: X, you coded: Y" and "<Category> is not coded for
+    # this utterance. Key: X" start with the category, so one prefix test covers
+    # every situation.
+    for needle in CATEGORY_NEEDLES:
+        if msg.startswith(needle):
+            return CATEGORY_ALIASES[needle]
     # Never fall back to the raw message: it can contain the key's value.
     return "Coding"
 
@@ -666,7 +676,30 @@ if page == "New Check":
             else:
                 total = len(flagged) + len(missing_utts)
                 st.markdown(f"**{total} item(s)** need another look.")
-                for utt in flagged:
+
+                # Flagged and missing utterances are shown in one list, ordered by
+                # where they sit in the file — a missing utterance appears between
+                # the utterances it belongs between, exactly as in the marked-up
+                # file, rather than being appended at the end away from its context.
+                ordered = [(u.anchor_row_index, "utt", u) for u in flagged]
+                ordered += [
+                    ((i.insert_after_row_index or -1) + 0.5, "missing", i) for i in missing_utts
+                ]
+                ordered.sort(key=lambda x: x[0])
+
+                for _, kind, obj in ordered:
+                    if kind == "missing":
+                        text = obj.expected or "no transcript"
+                        with st.container(border=True):
+                            st.markdown(f'**Utterance not coded** — "{text}"')
+                            st.markdown(
+                                "Re-check: " + _chips([("Missing utterance", True)])
+                                + "  <span style='color:var(--muted)'>please code this "
+                                "utterance here</span>",
+                                unsafe_allow_html=True,
+                            )
+                        continue
+                    utt = obj
                     ui = issues_by_utt[utt.uid]
                     wrong_cats = sorted({issue_category(i) for i in ui if i.kind != "missing"})
                     miss_cats = sorted({issue_category(i) for i in ui if i.kind == "missing"})
@@ -675,17 +708,6 @@ if page == "New Check":
                         st.markdown(f'**Utterance {utt.uid:02d}** — "{text}"')
                         pairs = [(c, False) for c in wrong_cats] + [(c, True) for c in miss_cats]
                         st.markdown("Re-check: " + _chips(pairs), unsafe_allow_html=True)
-
-                # Missing whole utterances join the same list, marked "missing".
-                for i in missing_utts:
-                    text = i.expected or "no transcript"
-                    with st.container(border=True):
-                        st.markdown(f'**Utterance not coded** — "{text}"')
-                        st.markdown(
-                            "Re-check: " + _chips([("Missing utterance", True)])
-                            + "  <span style='color:var(--muted)'>please code this utterance</span>",
-                            unsafe_allow_html=True,
-                        )
 
                 # How this is coded — rule for each category with a genuine coding
                 # difference (not the merely-missing ones), shown once, no answers.

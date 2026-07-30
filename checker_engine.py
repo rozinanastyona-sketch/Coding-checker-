@@ -1520,11 +1520,16 @@ def write_student_feedback_excel(
         ws.insert_rows(insert_at)
         for col in range(1, ws.max_column + 1):
             ws.cell(row=insert_at, column=col).fill = orange
+        # The transcript goes in the marker cell itself: in the Comment column it
+        # sits far to the right of the marker and is easy to miss.
         marker = ws.cell(row=insert_at, column=behavior_col)
-        marker.value = "⟨ please code this utterance ⟩"
+        t = clean_text(transcript)
+        marker.value = (
+            f'⟨ please code this utterance: "{t}" ⟩' if t else "⟨ please code this utterance ⟩"
+        )
         marker.font = Font(bold=True)
         if comment_col:
-            ws.cell(row=insert_at, column=comment_col).value = clean_text(transcript)
+            ws.cell(row=insert_at, column=comment_col).value = t
         body = "This utterance from the key was not coded. Please code it."
         t = clean_text(transcript)
         if t:
