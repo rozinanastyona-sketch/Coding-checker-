@@ -256,25 +256,48 @@ def _grade_item(item, given):
         got = set(given)
         return got == want, f'Key: {", ".join(ans)}'
     if cat == "SV":
-        lines = []
-        all_ok = True
-        for col, correct_v in ans.items():
-            g = str(given.get(col, "")).strip()
-            cv = str(correct_v).strip()
-            if col == "USV":
-                # Accept the coding-sheet form the student is practising, e.g.
-                # "USV: DOG EAT" or just "DOG EAT"; "NO"/"NONE" means no USV.
-                g_norm = _re.sub(r"^\s*usv\s*:\s*", "", g, flags=_re.I).strip()
-                if cv.upper() == "NO":
-                    ok = g_norm.upper() in ("NO", "NONE")
+        def grade_against(candidate):
+            lines, all_ok = [], True
+            for col, correct_v in candidate.items():
+                g = str(given.get(col, "")).strip()
+                cv = str(correct_v).strip()
+                if col == "USV":
+                    # Accept the coding-sheet form the student is practising, e.g.
+                    # "USV: DOG EAT" or just "DOG EAT"; "NO"/"NONE" means no USV.
+                    g_norm = _re.sub(r"^\s*usv\s*:\s*", "", g, flags=_re.I).strip()
+                    if cv.upper() == "NO":
+                        ok = g_norm.upper() in ("NO", "NONE")
+                    else:
+                        ok = g_norm.upper() == cv.upper()
                 else:
-                    ok = g_norm.upper() == cv.upper()
-            else:
-                ok = g.upper() == cv.upper()
-            all_ok = all_ok and ok
-            mark = "✓" if ok else "✗"
-            lines.append(f'- {col}: you coded "{g or "-"}" · key "{cv}"  {mark}')
-        return all_ok, "\n".join(lines)
+                    ok = g.upper() == cv.upper()
+                all_ok = all_ok and ok
+                lines.append(f'- {col}: you coded "{g or "-"}" · key "{cv}"  {"✓" if ok else "✗"}')
+            return all_ok, lines
+
+        # Some utterances have two defensible readings (e.g. "-S" as a contracted
+        # copula or as a plural marker). Every accepted reading is graded and any
+        # one of them counts as correct; feedback is shown against the closest.
+        candidates = [ans] + list(item.get("answer_alt") or [])
+        results = [grade_against(c) for c in candidates]
+        if any(ok for ok, _ in results):
+            detail = next(lines for ok, lines in results if ok)
+            if len(candidates) > 1:
+                detail = "\n".join(detail) + (
+                    "\n\n_This utterance has more than one defensible reading — "
+                    "both are accepted._"
+                )
+                return True, detail
+            return True, "\n".join(detail)
+        # Nothing matched: report against the reading the student came closest to.
+        best = max(results, key=lambda r: sum(1 for ln in r[1] if ln.endswith("✓")))
+        detail = "\n".join(best[1])
+        if len(candidates) > 1:
+            detail += (
+                "\n\n_This utterance has more than one defensible reading — "
+                "the closest one is shown._"
+            )
+        return False, detail
     if cat == "Parts of Speech":
         want = {"Absent"} if ans == "Absent" else {x.strip() for x in ans.split(",")}
         got = set(given)

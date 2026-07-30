@@ -356,14 +356,25 @@ items:
   category: SV
   n: 4
   utterance: HORSE -S PUSH BASKET
-  rationale: The -S can be a contracted copula, which counts as a non-lexical verb (compare "PIG -'S WASH
-    IN BATHTUB"). But Agreement is NOT coded, because the code applies only when the SYMBOL IS, AM, or
-    ARE is present - a contracted copula does not trigger it.
+  rationale: >-
+    This one has two defensible readings, and both are accepted. Read -S as a contracted copula ("the
+    horse's pushing") and it is a non-lexical verb alongside the lexical verb PUSH. Read -S as a plural
+    marker ("horses push") and there is no 'to be' verb at all, so only the lexical verb PUSH is coded.
+    Either way the sentence is present, PUSH is the lexical verb, and the USV is HORSE PUSH. Subject-Verb
+    Agreement is NOT coded in either reading, because that code applies only when the symbol IS, AM or ARE
+    is present, and a contracted copula does not trigger it.
   ref: SV / USV coding; SV Agreement / "Only... utterances that contain at least one 'to be' verb"
   answer:
     SV Present: 'YES'
     Lexical Verb: 'YES'
     Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'NO'
+    USV: HORSE PUSH
+    Repeated SV: 'NO'
+  answer_alt:
+  - SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'NO'
     Subject-Verb Agreement: 'NO'
     USV: HORSE PUSH
     Repeated SV: 'NO'
@@ -801,13 +812,24 @@ items:
   category: SV
   n: 4
   utterance: DUCK -S NEED MEDICINE
-  rationale: The -S can be a contracted copula (non-lexical verb), and NEED is the lexical verb. Agreement
-    is not coded - the code requires the symbol IS, AM, or ARE, and none is present.
+  rationale: >-
+    Like HORSE -S PUSH BASKET, this has two defensible readings and both are accepted. Read -S as a
+    contracted copula and it is a non-lexical verb alongside the lexical verb NEED; read it as a plural
+    marker ("ducks need") and there is no 'to be' verb, so only NEED is coded. Either way the sentence is
+    present and the USV is DUCK NEED. Subject-Verb Agreement is not coded in either reading, because the
+    code requires the symbol IS, AM or ARE and none is present.
   ref: SV / USV coding ("I -S WASH -S BATHTUB -> SV = I WASH"); SV Agreement scope
   answer:
     SV Present: 'YES'
     Lexical Verb: 'YES'
     Non-lexical Verb: 'YES'
+    Subject-Verb Agreement: 'NO'
+    USV: DUCK NEED
+    Repeated SV: 'NO'
+  answer_alt:
+  - SV Present: 'YES'
+    Lexical Verb: 'YES'
+    Non-lexical Verb: 'NO'
     Subject-Verb Agreement: 'NO'
     USV: DUCK NEED
     Repeated SV: 'NO'
