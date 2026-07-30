@@ -127,13 +127,9 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
     """
     labels = ["Upload", "Summary", "Review", "Training"]
     css = [
-        # One flex row instead of columns: columns gave every chip its own equal-width
-        # box, which stretched the chips and let the separate arrows drift out of line.
-        # Here each chip and its arrow share one vertically-centred flex line.
-        '.st-key-stepbar [data-testid="stVerticalBlock"]{'
-        "flex-direction:row;align-items:center;gap:10px;flex-wrap:wrap;}",
-        'div[class*="st-key-stepper_"]{'
-        "display:flex;align-items:center;gap:10px;width:auto!important;flex:0 0 auto;}",
+        # st.columns guarantees the row; the chip and its arrow then share one
+        # vertically-centred flex line inside the column, so they cannot drift apart.
+        'div[class*="st-key-stepper_"]{display:flex;align-items:center;gap:10px;}',
         # The chip itself, sized to its own label like the original inline chips.
         'div[class*="st-key-stepper_"] button{'
         "display:flex;align-items:center;justify-content:center;gap:8px;width:auto;"
@@ -169,8 +165,11 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
             css.append(f'{sel}::before{{content:"{i + 1}";}}')
     st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
 
-    with st.container(key="stepbar"):
-        for i, lab in enumerate(labels):
+    # One column per chip, sized to its label, plus a spacer so they stay left.
+    widths = [len(lab) + 3.0 for lab in labels] + [26.0]
+    cols = st.columns(widths, vertical_alignment="center")
+    for i, lab in enumerate(labels):
+        with cols[i]:
             if st.button(lab, key=f"stepper_{i}", disabled=i > unlocked):
                 st.session_state["step"] = i
                 st.rerun()
