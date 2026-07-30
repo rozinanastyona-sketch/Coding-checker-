@@ -69,24 +69,13 @@ THEME_CSS = """
   background:var(--card); margin-bottom:8px; overflow:hidden;
 }
 [data-testid="stExpander"] summary{ font-weight:500; }
-/* Stepper — real buttons styled as chips. Keyed containers let us target only
-   the stepper without touching any other button on the page. */
-div[class*="st-key-stepper_"] button{
-  border-radius:20px; font-size:13px; font-weight:600; padding:6px 14px;
-  background:#2b3038; color:var(--muted); border:1px solid var(--line);
-}
-div[class*="st-key-stepper_"] button:hover:not(:disabled){
-  color:var(--brand-text); border-color:var(--brand);
-}
-div[class*="st-key-stepper_"] button[kind="primary"]{
-  background:var(--brand-soft); color:var(--brand-text); border:1px solid var(--brand);
-}
-div[class*="st-key-stepper_"] button:disabled{
-  opacity:.45; cursor:not-allowed; color:var(--muted); border-color:var(--line);
-}
-div[class*="st-key-stepper_"]{margin-bottom:6px;}
-/* Legacy HTML stepper (no longer rendered; kept so older markup still styles) */
+/* Stepper */
 .stepper{display:flex;gap:6px;align-items:center;margin:2px 0 20px;flex-wrap:wrap;}
+/* Steps are links so they can navigate, but they keep the chip look exactly. */
+.stepper a{text-decoration:none;color:inherit;}
+.stepper a .stp{cursor:pointer;transition:.15s;}
+.stepper a:hover .stp{filter:brightness(1.18);}
+.stp.locked{opacity:.45;cursor:not-allowed;}
 .stp{display:flex;align-items:center;gap:8px;color:var(--muted);background:#2b3038;
   padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;}
 .stp .num{width:22px;height:22px;border-radius:50%;background:#3a414d;display:grid;
@@ -128,32 +117,48 @@ footer{visibility:hidden; height:0;}
 st.markdown(THEME_CSS, unsafe_allow_html=True)
 
 
+def apply_stepper_click(unlocked: int) -> None:
+    """Handle a click on the stepper, which arrives as ?step=N in the URL.
+
+    Kept separate from rendering so the chips can stay plain HTML links and keep
+    their original look. A step above 'unlocked' is ignored, so a link cannot be
+    used to skip ahead of the wizard.
+    """
+    raw = st.query_params.get("step")
+    if raw is None:
+        return
+    try:
+        target = int(raw)
+    except (TypeError, ValueError):
+        target = None
+    if target is not None and 0 <= target <= 3 and target <= unlocked:
+        st.session_state["step"] = target
+    del st.query_params["step"]
+    st.rerun()
+
+
 def render_stepper(step: int, unlocked: int = 0) -> None:
-    """Clickable step indicator — a second way to navigate the wizard.
+    """The step indicator, and a second way to navigate the wizard.
 
-    Real buttons rather than HTML, because markdown cannot call back into
-    Streamlit. Clicking a step writes st.session_state["step"] and reruns, the
-    same mechanism the bottom buttons use, so both stay in sync.
-
-    'unlocked' is the highest step the user may jump to: until a file has been
-    uploaded and checked only Upload is reachable, so Summary/Review/Training
-    render disabled (muted, cursor: not-allowed, no click). Completed steps stay
-    clickable so the user can go back.
+    Same chips as before; each reachable one is wrapped in a link to ?step=N,
+    which apply_stepper_click() turns into the same st.session_state["step"]
+    change the bottom buttons make. Steps beyond 'unlocked' are not links and
+    render muted with cursor: not-allowed.
     """
     labels = ["Upload", "Summary", "Review", "Training"]
-    cols = st.columns(len(labels))
-    for i, (col, lab) in enumerate(zip(cols, labels)):
-        mark = "✓" if i < step else str(i + 1)
-        with col:
-            if st.button(
-                f"{mark}  {lab}",
-                key=f"stepper_{i}",
-                disabled=i > unlocked,
-                use_container_width=True,
-                type="primary" if i == step else "secondary",
-            ):
-                st.session_state["step"] = i
-                st.rerun()
+    html = '<div class="stepper">'
+    for i, lab in enumerate(labels):
+        cls = "stp" + (" active" if i == step else "") + (" done" if i < step else "")
+        num = "&#10003;" if i < step else str(i + 1)
+        chip = f'<div class="{cls}"><span class="num">{num}</span>{lab}</div>'
+        if i <= unlocked:
+            html += f'<a href="?step={i}" target="_self">{chip}</a>'
+        else:
+            html += f'<div class="{cls} locked"><span class="num">{num}</span>{lab}</div>'
+        if i < len(labels) - 1:
+            html += '<span class="arw">&rsaquo;</span>'
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -444,7 +449,10 @@ if page == "New Check":
         st.stop()
 
     # Summary/Review/Training only become reachable once a file has been checked.
-    render_stepper(step, unlocked=3 if st.session_state.get("results") else 0)
+    unlocked = 3 if st.session_state.get("results") else 0
+    apply_stepper_click(unlocked)
+    step = st.session_state.get("step", 0)
+    render_stepper(step, unlocked)
     themes = load_training_items().get("video_themes", {})
 
     # ---------------------------------------------------------------- STEP 0
