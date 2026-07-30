@@ -172,6 +172,25 @@ reminders:
     Remember: grammatical intent must be judged from context - the same utterance can have
     clear grammatical intent in one instance and not clear in another, depending on the context.
 
+# Appended to a category's comment when the disagreement may follow from the
+# transcript rather than from the coding decision itself. Reviewers asked to be
+# able to tell those two apart at a glance.
+qualifiers:
+  transcript_differs: >-
+    NOTE: your transcript of this utterance differs from the key's, so this code may
+    follow from the transcript rather than from the coding decision. Check the
+    utterance itself first.
+  relevance_differs: >-
+    NOTE: you marked relevance differently from the key here (square brackets), which
+    changes which symbols count. This code may follow from that rather than from the
+    coding decision itself.
+  # Used on a missing/extra utterance pair that sits in the same place: almost always
+  # one utterance transcribed or segmented two different ways, not a skipped one.
+  swapped_utterance: >-
+    NOTE: an utterance you coded sits in this same place, transcribed differently. This
+    is most likely one utterance transcribed or segmented two ways rather than a
+    skipped one - compare the two and correct the transcript.
+
 # Used when a category above has no template for the situation.
 fallback:
   wrong_value: "{category} - key: {key}, you coded: {found}."

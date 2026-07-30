@@ -504,9 +504,27 @@ def validate_row_against_key(
     the first place, the count follows from that and the student should be told so.
     """
     category = entry.get("group")
+    both_texts = bool(utterance_text and key_text)
     transcript_differs = bool(
-        utterance_text and key_text and _match_text(utterance_text) != _match_text(key_text)
+        both_texts and _match_text(utterance_text) != _match_text(key_text)
     )
+    # Same symbols, different relevance marking ("[-S]" vs "-S"). _match_text ignores
+    # brackets so the utterances still pair up, but the bracketing itself changes which
+    # symbols count, and it is often the real reason a code disagrees.
+    relevance_differs = bool(
+        both_texts
+        and not transcript_differs
+        and norm(utterance_text).upper() != norm(key_text).upper()
+    )
+
+    def qualifier() -> str:
+        """A note telling the reviewer this may be a transcript, not a coding, error."""
+        q = (grammar.get("feedback", {}) or {}).get("qualifiers", {}) or {}
+        name = "transcript_differs" if transcript_differs else (
+            "relevance_differs" if relevance_differs else None
+        )
+        text = clean_text(q.get(name)) if name else ""
+        return " " + " ".join(text.split()) if text else ""
 
     def feedback(situation: str, **kw) -> str:
         if transcript_differs:
@@ -516,8 +534,8 @@ def validate_row_against_key(
             defined = (grammar.get("feedback", {}).get("categories", {})
                        .get(category, {}) or {}).get(situation + "_transcript_differs")
             if defined:
-                return variant
-        return render_feedback(grammar, category, situation, **kw)
+                return variant + qualifier()
+        return render_feedback(grammar, category, situation, **kw) + qualifier()
 
     if not behavior_equals(student_row.behavior, key_row.behavior):
         return feedback(
@@ -913,6 +931,24 @@ def compare_files_with_alignment(
     red = grammar["colors"]["error"]
     purple = grammar["colors"]["boundary_unclear"]
 
+    # An unmatched KEY utterance sitting next to an unmatched STUDENT utterance is
+    # almost always one utterance transcribed or segmented two different ways, not a
+    # skipped one plus an invented one. Reviewers read "you did not code X" and see
+    # that the coder did code something there, so both sides say so explicitly.
+    swapped_key, swapped_student = set(), set()
+    for a in range(len(pairs) - 1):
+        (s1, k1), (s2, k2) = pairs[a], pairs[a + 1]
+        if s1 is None and k1 is not None and s2 is not None and k2 is None:
+            swapped_key.add(k1)
+            swapped_student.add(s2)
+        elif s1 is not None and k1 is None and s2 is None and k2 is not None:
+            swapped_student.add(s1)
+            swapped_key.add(k2)
+    swap_note = clean_text(
+        ((grammar.get("feedback", {}) or {}).get("qualifiers", {}) or {}).get("swapped_utterance")
+    )
+    swap_note = " " + " ".join(swap_note.split()) if swap_note else ""
+
     last_matched_student_row = 0
     for s_idx, k_idx in pairs:
         if s_idx is not None and k_idx is not None:
@@ -925,7 +961,8 @@ def compare_files_with_alignment(
                 kind="missing_utterance",
                 color=red,
                 message=render_feedback(grammar, None, "missing_utterance",
-                                        key=key_utt.utterance_text or "no transcript"),
+                                        key=key_utt.utterance_text or "no transcript")
+                + (swap_note if k_idx in swapped_key else ""),
                 expected=key_utt.utterance_text,
                 insert_after_row_index=last_matched_student_row,
             ))
@@ -935,7 +972,8 @@ def compare_files_with_alignment(
                 kind="extra_utterance",
                 color=purple,
                 message=render_feedback(grammar, None, "extra_utterance",
-                                        utterance=student_utt.utterance_text),
+                                        utterance=student_utt.utterance_text)
+                + (swap_note if s_idx in swapped_student else ""),
                 row_index=student_utt.anchor_row_index,
                 utterance_id=student_utt.uid,
             ))
