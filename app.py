@@ -129,7 +129,14 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
     css = [
         # st.columns guarantees the row; the chip and its arrow then share one
         # vertically-centred flex line inside the column, so they cannot drift apart.
-        'div[class*="st-key-stepper_"]{display:flex;align-items:center;gap:10px;}',
+        'div[class*="st-key-stepper_"]{display:flex;align-items:center;gap:6px;}',
+        # Measured in the browser: a weighted column is wider than its chip, and the
+        # leftover pushed the next chip ~20px further away. Letting these columns
+        # shrink to their content puts the chips back at the original ~18px apart,
+        # whatever the window width. Scoped by :has so other columns are untouched.
+        '[data-testid="stColumn"]:has(div[class*="st-key-stepper_"]){'
+        "flex:0 0 auto!important;width:auto!important;min-width:0!important;}",
+        '[data-testid="stHorizontalBlock"]:has(div[class*="st-key-stepper_"]){gap:6px;}',
         # The chip itself, sized to its own label like the original inline chips.
         'div[class*="st-key-stepper_"] button{'
         "display:flex;align-items:center;justify-content:center;gap:8px;width:auto;"
