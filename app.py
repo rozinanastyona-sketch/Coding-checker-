@@ -175,9 +175,12 @@ def render_stepper(step: int, unlocked: int = 0) -> None:
     for col in arrow_cols:
         # Sized and line-height-matched to the chip so it sits level with them
         # instead of looking like a stray small character between big buttons.
+        # The "›" glyph is small inside its em box, so it needs a much larger
+        # font-size and some weight to carry the same visual weight as the chips.
         col.markdown(
             '<div style="display:flex;align-items:center;justify-content:center;'
-            'height:38px;color:#556074;font-size:24px;line-height:1;">&rsaquo;</div>',
+            'height:38px;color:#6b7689;font-size:38px;font-weight:700;'
+            'line-height:1;">&rsaquo;</div>',
             unsafe_allow_html=True,
         )
     st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
