@@ -71,11 +71,8 @@ THEME_CSS = """
 [data-testid="stExpander"] summary{ font-weight:500; }
 /* Stepper */
 .stepper{display:flex;gap:6px;align-items:center;margin:2px 0 20px;flex-wrap:wrap;}
-/* Steps are links so they can navigate, but they keep the chip look exactly. */
-.stepper a{text-decoration:none;color:inherit;}
-.stepper a .stp{cursor:pointer;transition:.15s;}
-.stepper a:hover .stp{filter:brightness(1.18);}
-.stp.locked{opacity:.45;cursor:not-allowed;}
+/* The stepper chips themselves are styled in render_stepper(), which rebuilds
+   their colours and number badges for the current step on every run. */
 .stp{display:flex;align-items:center;gap:8px;color:var(--muted);background:#2b3038;
   padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;}
 .stp .num{width:22px;height:22px;border-radius:50%;background:#3a414d;display:grid;
@@ -117,48 +114,68 @@ footer{visibility:hidden; height:0;}
 st.markdown(THEME_CSS, unsafe_allow_html=True)
 
 
-def apply_stepper_click(unlocked: int) -> None:
-    """Handle a click on the stepper, which arrives as ?step=N in the URL.
-
-    Kept separate from rendering so the chips can stay plain HTML links and keep
-    their original look. A step above 'unlocked' is ignored, so a link cannot be
-    used to skip ahead of the wizard.
-    """
-    raw = st.query_params.get("step")
-    if raw is None:
-        return
-    try:
-        target = int(raw)
-    except (TypeError, ValueError):
-        target = None
-    if target is not None and 0 <= target <= 3 and target <= unlocked:
-        st.session_state["step"] = target
-    del st.query_params["step"]
-    st.rerun()
-
-
 def render_stepper(step: int, unlocked: int = 0) -> None:
     """The step indicator, and a second way to navigate the wizard.
 
-    Same chips as before; each reachable one is wrapped in a link to ?step=N,
-    which apply_stepper_click() turns into the same st.session_state["step"]
-    change the bottom buttons make. Steps beyond 'unlocked' are not links and
-    render muted with cursor: not-allowed.
+    Buttons rather than links: a link would navigate the browser, which starts a
+    new Streamlit session and would ask for the password again. Buttons rerun in
+    place, so the file, the results and the login all survive.
+
+    To keep the original chip look the button carries only its label, and the CSS
+    below - rebuilt on every run for the current step - adds the round number
+    badge and the active/done/locked colours.
     """
     labels = ["Upload", "Summary", "Review", "Training"]
-    html = '<div class="stepper">'
-    for i, lab in enumerate(labels):
-        cls = "stp" + (" active" if i == step else "") + (" done" if i < step else "")
-        num = "&#10003;" if i < step else str(i + 1)
-        chip = f'<div class="{cls}"><span class="num">{num}</span>{lab}</div>'
-        if i <= unlocked:
-            html += f'<a href="?step={i}" target="_self">{chip}</a>'
+    css = [
+        # The chip itself.
+        'div[class*="st-key-stepper_"] button{'
+        "display:flex;align-items:center;justify-content:center;gap:8px;width:100%;"
+        "color:var(--muted);background:#2b3038;border:none!important;"
+        "padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;"
+        "line-height:1.2;min-height:0;transition:.15s;}",
+        # The round number badge, drawn in front of the label.
+        'div[class*="st-key-stepper_"] button::before{'
+        "width:22px;height:22px;border-radius:50%;background:#3a414d;color:inherit;"
+        "display:grid;place-items:center;font-size:12px;flex:none;}",
+        'div[class*="st-key-stepper_"] button:disabled{opacity:.45;cursor:not-allowed;}',
+        'div[class*="st-key-stepper_"] button:hover:not(:disabled){filter:brightness(1.18);}',
+        'div[class*="st-key-stepper_"] button p{margin:0;}',
+    ]
+    for i in range(len(labels)):
+        sel = f'div[class*="st-key-stepper_{i}"] button'
+        if i < step:  # completed
+            css.append(f'{sel}::before{{content:"\\2713";background:var(--green);color:#1b1e13;}}')
+            css.append(f"{sel}{{color:var(--green);background:var(--green-soft);}}")
+        elif i == step:  # current
+            css.append(f'{sel}::before{{content:"{i + 1}";background:var(--brand);color:#1b1013;}}')
+            css.append(f"{sel}{{color:var(--brand-text);background:var(--brand-soft);}}")
         else:
-            html += f'<div class="{cls} locked"><span class="num">{num}</span>{lab}</div>'
+            css.append(f'{sel}::before{{content:"{i + 1}";}}')
+    st.markdown("<style>" + "".join(css) + "</style>", unsafe_allow_html=True)
+
+    # Narrow columns keep the chips compact, with the same "›" between them.
+    widths, arrow_cols = [], []
+    for i in range(len(labels)):
+        widths.append(1.0)
         if i < len(labels) - 1:
-            html += '<span class="arw">&rsaquo;</span>'
-    html += "</div>"
-    st.markdown(html, unsafe_allow_html=True)
+            widths.append(0.12)
+    widths.append(2.6)  # spacer, so the chips don't stretch across the page
+    cols = st.columns(widths, vertical_alignment="center")
+    for i, lab in enumerate(labels):
+        with cols[i * 2]:
+            if st.button(
+                lab, key=f"stepper_{i}", disabled=i > unlocked, use_container_width=True
+            ):
+                st.session_state["step"] = i
+                st.rerun()
+        if i < len(labels) - 1:
+            arrow_cols.append(cols[i * 2 + 1])
+    for col in arrow_cols:
+        col.markdown(
+            '<div style="text-align:center;color:#556074;font-size:15px">&rsaquo;</div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown('<div style="height:10px"></div>', unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
@@ -450,8 +467,6 @@ if page == "New Check":
 
     # Summary/Review/Training only become reachable once a file has been checked.
     unlocked = 3 if st.session_state.get("results") else 0
-    apply_stepper_click(unlocked)
-    step = st.session_state.get("step", 0)
     render_stepper(step, unlocked)
     themes = load_training_items().get("video_themes", {})
 
