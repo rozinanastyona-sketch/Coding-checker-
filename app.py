@@ -69,7 +69,23 @@ THEME_CSS = """
   background:var(--card); margin-bottom:8px; overflow:hidden;
 }
 [data-testid="stExpander"] summary{ font-weight:500; }
-/* Stepper */
+/* Stepper — real buttons styled as chips. Keyed containers let us target only
+   the stepper without touching any other button on the page. */
+div[class*="st-key-stepper_"] button{
+  border-radius:20px; font-size:13px; font-weight:600; padding:6px 14px;
+  background:#2b3038; color:var(--muted); border:1px solid var(--line);
+}
+div[class*="st-key-stepper_"] button:hover:not(:disabled){
+  color:var(--brand-text); border-color:var(--brand);
+}
+div[class*="st-key-stepper_"] button[kind="primary"]{
+  background:var(--brand-soft); color:var(--brand-text); border:1px solid var(--brand);
+}
+div[class*="st-key-stepper_"] button:disabled{
+  opacity:.45; cursor:not-allowed; color:var(--muted); border-color:var(--line);
+}
+div[class*="st-key-stepper_"]{margin-bottom:6px;}
+/* Legacy HTML stepper (no longer rendered; kept so older markup still styles) */
 .stepper{display:flex;gap:6px;align-items:center;margin:2px 0 20px;flex-wrap:wrap;}
 .stp{display:flex;align-items:center;gap:8px;color:var(--muted);background:#2b3038;
   padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;}
@@ -112,17 +128,32 @@ footer{visibility:hidden; height:0;}
 st.markdown(THEME_CSS, unsafe_allow_html=True)
 
 
-def render_stepper(step: int) -> None:
+def render_stepper(step: int, unlocked: int = 0) -> None:
+    """Clickable step indicator — a second way to navigate the wizard.
+
+    Real buttons rather than HTML, because markdown cannot call back into
+    Streamlit. Clicking a step writes st.session_state["step"] and reruns, the
+    same mechanism the bottom buttons use, so both stay in sync.
+
+    'unlocked' is the highest step the user may jump to: until a file has been
+    uploaded and checked only Upload is reachable, so Summary/Review/Training
+    render disabled (muted, cursor: not-allowed, no click). Completed steps stay
+    clickable so the user can go back.
+    """
     labels = ["Upload", "Summary", "Review", "Training"]
-    html = '<div class="stepper">'
-    for i, lab in enumerate(labels):
-        cls = "stp" + (" active" if i == step else "") + (" done" if i < step else "")
-        num = "&#10003;" if i < step else str(i + 1)
-        html += f'<div class="{cls}"><span class="num">{num}</span>{lab}</div>'
-        if i < len(labels) - 1:
-            html += '<span class="arw">&rsaquo;</span>'
-    html += "</div>"
-    st.markdown(html, unsafe_allow_html=True)
+    cols = st.columns(len(labels))
+    for i, (col, lab) in enumerate(zip(cols, labels)):
+        mark = "✓" if i < step else str(i + 1)
+        with col:
+            if st.button(
+                f"{mark}  {lab}",
+                key=f"stepper_{i}",
+                disabled=i > unlocked,
+                use_container_width=True,
+                type="primary" if i == step else "secondary",
+            ):
+                st.session_state["step"] = i
+                st.rerun()
 
 
 # ---------------------------------------------------------------------------
@@ -412,7 +443,8 @@ if page == "New Check":
         )
         st.stop()
 
-    render_stepper(step)
+    # Summary/Review/Training only become reachable once a file has been checked.
+    render_stepper(step, unlocked=3 if st.session_state.get("results") else 0)
     themes = load_training_items().get("video_themes", {})
 
     # ---------------------------------------------------------------- STEP 0
