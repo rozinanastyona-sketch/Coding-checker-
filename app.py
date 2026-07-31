@@ -753,17 +753,26 @@ if page == "New Check":
                 "missed is inserted with its transcript and a note to code it — no answers. "
                 "The Scores sheet shows your totals and percentage per category."
             )
+            st.caption(
+                "Colours in the file: **red** — a coding disagreement · **amber** — the transcript "
+                "itself differs (not a coding error) · **orange** — something not coded."
+            )
 
             # File inputs, all answer-free for coded values:
             #  - wrong_rows: rows with a wrong coded value -> rule comment
             #  - missing_cat_rows: a category not coded at all -> "missing" note only
             #  - missing_utts_arg: whole utterances to insert with their transcript
             utt_by_uid = {u.uid: u for u in student_utts}
-            wrong_rows, missing_cat_rows = {}, {}
+            wrong_rows, missing_cat_rows, transcript_rows = {}, {}, {}
             for i in issues:
                 if i.kind == "missing_utterance":
                     continue
-                if i.kind == "missing":
+                if i.kind == "transcript_mismatch":
+                    # Kept apart from coding errors: this row is the CI row only
+                    # because the transcript is written there.
+                    if i.row_index is not None:
+                        transcript_rows[i.row_index] = i.message
+                elif i.kind == "missing":
                     u = utt_by_uid.get(i.utterance_id)
                     if u is not None:
                         missing_cat_rows.setdefault(u.anchor_row_index, set()).add(issue_category(i))
@@ -781,7 +790,7 @@ if page == "New Check":
                 write_student_feedback_excel(
                     Path(st.session_state["student_path"]), fb_path, grammar,
                     wrong_rows, missing_cat_rows, missing_utts_arg,
-                    scores_rows=scores_rows,
+                    scores_rows=scores_rows, transcript_rows=transcript_rows,
                 )
                 fb_bytes = fb_path.read_bytes()
             except Exception:

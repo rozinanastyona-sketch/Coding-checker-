@@ -66,9 +66,13 @@ utterance_detection:
     if_unclear: "mark_boundary_unclear"
 
 colors:
-  error: "FF9999"          # red
+  error: "FF9999"          # red - a coding disagreement
   usv_missing_note: "F4B183" # orange
   boundary_unclear: "C9A0DC" # purple
+  # A wrong transcript is not a coding error, but the transcript is written on the
+  # Communicative Intent row, so colouring it red made it look as if the CI code
+  # were wrong. Transcript problems get their own colour instead.
+  transcript: "FFE699"     # amber
 
 sequence:
   - rank: 1

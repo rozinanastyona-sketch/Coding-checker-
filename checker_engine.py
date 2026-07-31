@@ -910,10 +910,12 @@ def check_transcript(student_utt: Utterance, key_utt: Utterance, grammar: Dict[s
     same symbols, wrong order). Reviewers catch this by eye, so the checker
     should too. Comparison ignores case, spacing and bracket/paren notation,
     since relevance-marking is a separate judgment call and is not graded
-    here. This is a note-level (orange) issue: it does not affect the 1/0
-    Scores sheet, which only covers the 11 coding categories.
+    here. This is a note-level issue: it does not affect the 1/0 Scores sheet,
+    which only covers the 11 coding categories. It gets its own colour because
+    the transcript is written on the Communicative Intent row, and colouring
+    that row red made a transcript slip look like a wrong CI code.
     """
-    orange = grammar["colors"]["usv_missing_note"]
+    orange = grammar["colors"].get("transcript") or grammar["colors"]["usv_missing_note"]
     s_text, k_text = student_utt.utterance_text, key_utt.utterance_text
     if not s_text or not k_text:
         return []
@@ -1373,14 +1375,18 @@ def write_annotated_excel(
         ws.cell(row=1, column=review_col).value = "Review_Notes"
         ws.cell(row=1, column=review_col).font = Font(bold=True)
 
+    transcript_color = grammar["colors"].get("transcript") or grammar["colors"]["usv_missing_note"]
     fills = {
         "red": PatternFill("solid", fgColor=grammar["colors"]["error"]),
         "orange": PatternFill("solid", fgColor=grammar["colors"]["usv_missing_note"]),
         "purple": PatternFill("solid", fgColor=grammar["colors"]["boundary_unclear"]),
+        "amber": PatternFill("solid", fgColor=transcript_color),
     }
 
     # Map issue color hex back to fill by value.
     def fill_for(issue: Issue) -> PatternFill:
+        if issue.color == transcript_color:
+            return fills["amber"]
         if issue.color == grammar["colors"]["usv_missing_note"]:
             return fills["orange"]
         if issue.color == grammar["colors"]["boundary_unclear"]:
@@ -1498,6 +1504,7 @@ def write_student_feedback_excel(
     missing_cat_rows: Optional[Dict[int, List[str]]] = None,
     missing_utts: Optional[List[Tuple[Optional[int], str]]] = None,
     scores_rows: Optional[List[Dict[str, Any]]] = None,
+    transcript_rows: Optional[Dict[int, str]] = None,
 ) -> None:
     """The student's single marked-up file: general rules + highlighted errors.
 
@@ -1546,6 +1553,10 @@ def write_student_feedback_excel(
     hints = (grammar.get("feedback", {}) or {}).get("student_hints", {}) or {}
     red = PatternFill("solid", fgColor=grammar["colors"]["error"])
     orange = PatternFill("solid", fgColor=grammar["colors"]["usv_missing_note"])
+    amber = PatternFill(
+        "solid",
+        fgColor=grammar["colors"].get("transcript") or grammar["colors"]["usv_missing_note"],
+    )
 
     def rule_comment(cats: List[str]) -> str:
         lines = ["Re-check this utterance:"]
@@ -1568,6 +1579,28 @@ def write_student_feedback_excel(
         cm = CellComment(rule_comment(cats_sorted), "Coding Checker")
         cm.width = 360
         cm.height = max(90, 30 * (len(cats_sorted) + 1))
+        cell.comment = cm
+
+    # 1b. Transcript problems. The transcript is written on the Communicative Intent
+    # row, so a red row there reads as "your CI code is wrong". These get their own
+    # colour and a comment that names the transcript, not a coding category.
+    t_hint = clean_text(hints.get("Transcript"))
+    for row_index, _msg in (transcript_rows or {}).items():
+        excel_row = row_index + 2
+        if excel_row < 2 or excel_row > ws.max_row:
+            continue
+        if excel_row not in red_rows:
+            for col in range(1, ws.max_column + 1):
+                ws.cell(row=excel_row, column=col).fill = amber
+        cell = ws.cell(row=excel_row, column=behavior_col)
+        body = "TRANSCRIPT — the utterance itself differs from the key, this is not a "
+        body += "Communicative Intent error."
+        if t_hint:
+            body += f"\n{t_hint}"
+        prev = cell.comment.text if cell.comment else ""
+        cm = CellComment((prev + "\n\n" if prev else "") + body, "Coding Checker")
+        cm.width = 360
+        cm.height = 110
         cell.comment = cm
 
     # 2. Categories not coded at all: mark as missing, no rule, no value.
