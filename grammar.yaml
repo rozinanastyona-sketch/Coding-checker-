@@ -74,6 +74,20 @@ colors:
   # were wrong. Transcript problems get their own colour instead.
   transcript: "FFE699"     # amber
 
+# Utterances a coder may legitimately transcribe more than one way. Listed per key
+# file, so a variant accepted in one video never leaks into another. The canonical
+# form on the left is what the key holds; anything on the right is accepted as the
+# same utterance. Brackets and parentheses are ignored when matching, so listing
+# "BIG BIG" also covers "BIG [BIG]" and "BIG (BIG)". Only the transcript is
+# affected - every code is still compared against the key exactly as before.
+transcript_variants:
+  KEY_Video_3:
+    "BIG":
+      - "BIG BIG"
+  KEY_Video_4:
+    "YELLOW DUCK":
+      - "BIG YELLOW DUCK"
+
 sequence:
   - rank: 1
     group: "Communicative Intent"

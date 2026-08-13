@@ -436,23 +436,42 @@ def segment_utterances(events: List[EventRow], grammar: Dict[str, Any]) -> List[
             utt.boundary_unclear = True
         utterances.append(utt)
 
-    def split_off_header() -> List[EventRow]:
-        """Peel the trailing header rows (start/stop markers + CI) off `current`."""
+    def split_off_header(allow_ci: bool) -> List[EventRow]:
+        """Peel the trailing header rows (start/stop markers + CI) off `current`.
+
+        `allow_ci` says whether a trailing Communicative Intent row belongs to the
+        NEXT utterance. It does when the split was triggered by a Listing row (the
+        CI row of the new utterance arrives before its Listing row), but not when
+        the split was triggered by a CI row: that earlier CI row is the current
+        utterance's own.
+
+        Without this distinction an utterance coded only "Communicative Intent
+        Absent" - which is exactly what the rule "code nothing further when CI is
+        absent" produces - had no non-header row at all, so the whole utterance was
+        peeled off as a header and swallowed by the next one, taking the following
+        utterance's rows with it.
+        """
         nonlocal current
         i = len(current)
-        while i > 0 and is_header(current[i - 1]):
+        ci_taken = 0
+        while i > 0:
+            prev = current[i - 1]
+            if is_ci(prev):
+                if not allow_ci or ci_taken:
+                    break
+                ci_taken += 1
+            elif get_sequence_entry(grammar, prev.behavior) is not None:
+                break
             i -= 1
         header = current[i:]
         current = current[:i]
         return header
 
     for ev in events:
-        new_utterance = (
-            (is_listing(ev) and any(is_listing(e) for e in current))
-            or (is_ci(ev) and any(is_ci(e) for e in current))
-        )
-        if new_utterance:
-            header = split_off_header()
+        by_listing = is_listing(ev) and any(is_listing(e) for e in current)
+        by_ci = is_ci(ev) and any(is_ci(e) for e in current)
+        if by_listing or by_ci:
+            header = split_off_header(allow_ci=by_listing)
             flush(current)
             current = header
         current.append(ev)
@@ -495,6 +514,7 @@ def validate_row_against_key(
     grammar: Dict[str, Any],
     utterance_text: str = "",
     key_text: str = "",
+    variants: Optional[Dict[str, str]] = None,
 ) -> Optional[str]:
     """Return the student-facing comment for this row, or None if it matches the key.
 
@@ -506,14 +526,18 @@ def validate_row_against_key(
     category = entry.get("group")
     both_texts = bool(utterance_text and key_text)
     transcript_differs = bool(
-        both_texts and _match_text(utterance_text) != _match_text(key_text)
+        both_texts
+        and _match_text(utterance_text, variants) != _match_text(key_text, variants)
     )
     # Same symbols, different relevance marking ("[-S]" vs "-S"). _match_text ignores
     # brackets so the utterances still pair up, but the bracketing itself changes which
-    # symbols count, and it is often the real reason a code disagrees.
+    # symbols count, and it is often the real reason a code disagrees. An accepted
+    # transcript variant is not a relevance difference, so it is required here that the
+    # two agree even without the variant table.
     relevance_differs = bool(
         both_texts
         and not transcript_differs
+        and _match_text(utterance_text) == _match_text(key_text)
         and norm(utterance_text).upper() != norm(key_text).upper()
     )
 
@@ -666,7 +690,8 @@ def _reminder(grammar: Dict[str, Any], name: str) -> Optional[str]:
     return " ".join(str(r).split()) if r else None
 
 
-def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict[str, Any]) -> List[Issue]:
+def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict[str, Any],
+                       variants: Optional[Dict[str, str]] = None) -> List[Issue]:
     issues: List[Issue] = []
     red = grammar["colors"]["error"]
     purple = grammar["colors"]["boundary_unclear"]
@@ -738,7 +763,7 @@ def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict
         msg = validate_row_against_key(
             student_row, key_row, entry, grammar,
             utterance_text=student_utt.utterance_text or utterance_text,
-            key_text=key_utt.utterance_text,
+            key_text=key_utt.utterance_text, variants=variants,
         )
         if msg:
             issues.append(Issue(
@@ -775,7 +800,24 @@ def compare_utterances(student_utt: Utterance, key_utt: Utterance, grammar: Dict
     return issues
 
 
-def _match_text(s: str) -> str:
+def build_transcript_variants(grammar: Dict[str, Any], key_id: Optional[str]) -> Dict[str, str]:
+    """Accepted alternative transcripts for one key, as {variant: canonical}.
+
+    Keys are already in _match_text form, so brackets and parentheses are ignored
+    and a single entry covers "BIG BIG", "BIG [BIG]" and "BIG (BIG)".
+    """
+    if not key_id:
+        return {}
+    table = (grammar.get("transcript_variants") or {}).get(key_id) or {}
+    out: Dict[str, str] = {}
+    for canonical, variants in table.items():
+        canon = _match_text(canonical)
+        for v in variants or []:
+            out[_match_text(v)] = canon
+    return out
+
+
+def _match_text(s: str, variants: Optional[Dict[str, str]] = None) -> str:
     """Normalize an utterance transcript for alignment matching only.
 
     Brackets/parentheses are stripped here because the coder's
@@ -786,12 +828,15 @@ def _match_text(s: str) -> str:
     """
     t = re.sub(r"[\[\]\(\)]", " ", s or "")
     t = re.sub(r"\s+", " ", t).strip().upper()
+    if variants:
+        t = variants.get(t, t)
     return t
 
 
-def _text_similarity(a: str, b: str, a_partial: bool = False, b_partial: bool = False) -> float:
+def _text_similarity(a: str, b: str, a_partial: bool = False, b_partial: bool = False,
+                     variants: Optional[Dict[str, str]] = None) -> float:
     from difflib import SequenceMatcher
-    na, nb = _match_text(a), _match_text(b)
+    na, nb = _match_text(a, variants), _match_text(b, variants)
     if not na or not nb:
         # One or both sides untranscribed. In this ethogram the transcript lives on
         # the Communicative Intent row, so a coder who forgets that one row loses the
@@ -820,6 +865,7 @@ def align_utterances(
     student_utts: List[Utterance],
     key_utts: List[Utterance],
     min_similarity: float = 0.6,
+    variants: Optional[Dict[str, str]] = None,
 ) -> List[Tuple[Optional[int], Optional[int]]]:
     """
     Align student utterances to key utterances by transcript similarity
@@ -848,7 +894,7 @@ def align_utterances(
     sims = [[_text_similarity(
                 student_utts[i].utterance_text, key_utts[j].utterance_text,
                 a_partial=student_utts[i].text_is_partial,
-                b_partial=key_utts[j].text_is_partial)
+                b_partial=key_utts[j].text_is_partial, variants=variants)
              for j in range(m)] for i in range(n)]
 
     for i in range(1, n + 1):
@@ -902,7 +948,8 @@ def align_utterances(
     return pairs
 
 
-def check_transcript(student_utt: Utterance, key_utt: Utterance, grammar: Dict[str, Any]) -> List[Issue]:
+def check_transcript(student_utt: Utterance, key_utt: Utterance, grammar: Dict[str, Any],
+                     variants: Optional[Dict[str, str]] = None) -> List[Issue]:
     """Flag a transcript that differs from the key's.
 
     The codes can all be correct while the transcript itself is wrong (e.g.
@@ -919,7 +966,7 @@ def check_transcript(student_utt: Utterance, key_utt: Utterance, grammar: Dict[s
     s_text, k_text = student_utt.utterance_text, key_utt.utterance_text
     if not s_text or not k_text:
         return []
-    if _match_text(s_text) == _match_text(k_text):
+    if _match_text(s_text, variants) == _match_text(k_text, variants):
         return []
 
     ci_row = None
@@ -942,15 +989,19 @@ def check_transcript(student_utt: Utterance, key_utt: Utterance, grammar: Dict[s
 
 
 def compare_files_with_alignment(
-    student_df: pd.DataFrame, key_df: pd.DataFrame, grammar: Dict[str, Any]
+    student_df: pd.DataFrame, key_df: pd.DataFrame, grammar: Dict[str, Any],
+    key_id: Optional[str] = None,
 ) -> Tuple[List[Issue], List[Utterance], List[Utterance], List[Tuple[Optional[int], Optional[int]]]]:
+    """key_id names the reference key (e.g. "KEY_Video_3") so that any alternative
+    transcripts declared for it in grammar.yaml are accepted."""
     student_prepared = prepare_dataframe(student_df, grammar)
     key_prepared = prepare_dataframe(key_df, grammar)
 
     student_utts = segment_utterances(dataframe_to_events(student_prepared, grammar), grammar)
     key_utts = segment_utterances(dataframe_to_events(key_prepared, grammar), grammar)
 
-    pairs = align_utterances(student_utts, key_utts)
+    variants = build_transcript_variants(grammar, key_id)
+    pairs = align_utterances(student_utts, key_utts, variants=variants)
 
     issues: List[Issue] = []
     red = grammar["colors"]["error"]
@@ -977,8 +1028,12 @@ def compare_files_with_alignment(
     last_matched_student_row = 0
     for s_idx, k_idx in pairs:
         if s_idx is not None and k_idx is not None:
-            issues.extend(compare_utterances(student_utts[s_idx], key_utts[k_idx], grammar))
-            issues.extend(check_transcript(student_utts[s_idx], key_utts[k_idx], grammar))
+            issues.extend(
+                compare_utterances(student_utts[s_idx], key_utts[k_idx], grammar, variants)
+            )
+            issues.extend(
+                check_transcript(student_utts[s_idx], key_utts[k_idx], grammar, variants)
+            )
             last_matched_student_row = student_utts[s_idx].last_row_index
         elif k_idx is not None:
             key_utt = key_utts[k_idx]

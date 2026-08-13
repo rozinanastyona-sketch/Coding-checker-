@@ -552,7 +552,10 @@ if page == "New Check":
                 REFERENCE_DIR / selected["file_name"], sheet_name=selected.get("sheet_name")
             )
             issues, student_utts, key_utts, alignment = compare_files_with_alignment(
-                student_df, key_df, grammar
+                student_df, key_df, grammar,
+                # Names the key so any alternative transcripts declared for it in
+                # grammar.yaml (e.g. BIG / BIG BIG) are accepted.
+                key_id=selected.get("id") or Path(selected["file_name"]).stem,
             )
             st.session_state["results"] = (issues, student_utts, key_utts, alignment)
             st.session_state["selected_ref"] = selected
