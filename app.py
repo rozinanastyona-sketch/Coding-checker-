@@ -82,6 +82,17 @@ THEME_CSS = """
 .stp.done{color:var(--green);background:var(--green-soft);}
 .stp.done .num{background:var(--green);color:#1b1e13;}
 .stp .arw{color:#556074;font-size:15px;}
+/* Key Library — one card per utterance, codes stacked vertically so nothing
+   needs scrolling sideways. */
+.kcard{border:1px solid var(--line);border-radius:10px;background:var(--card);
+  padding:10px 13px;margin:8px 0;}
+.kchead{font-weight:600;font-size:13.5px;margin-bottom:7px;color:var(--ink);}
+.kchead .kcnum{color:var(--brand-text);margin-right:8px;}
+.kcrow{display:grid;grid-template-columns:200px 1fr;gap:12px;font-size:12.5px;
+  padding:3px 0;border-top:1px solid rgba(255,255,255,.04);}
+.kclab{color:var(--muted);}
+.kcval{color:var(--ink);}
+.kcnone{color:var(--muted);font-style:italic;font-size:12.5px;}
 /* Category bars */
 .catbar{display:grid;grid-template-columns:190px 1fr 34px;gap:12px;align-items:center;
   margin:8px 0;font-size:13px;}
@@ -395,6 +406,61 @@ def issue_category(issue):
             return CATEGORY_ALIASES[needle]
     # Never fall back to the raw message: it can contain the key's value.
     return "Coding"
+
+
+@st.cache_data(show_spinner=False)
+def key_table(file_name, sheet_name=None):
+    """Every utterance of a key with the code it carries in each category.
+
+    Cached because it parses the workbook; the Key Library shows this instead of
+    the passport's first five utterances, so a key can be read in the app.
+    """
+    key_df = read_excel_first_sheet_or_named(REFERENCE_DIR / file_name, sheet_name=sheet_name)
+    utts = ce.segment_utterances(
+        ce.dataframe_to_events(ce.prepare_dataframe(key_df, grammar), grammar), grammar
+    )
+    entries = {e.get("group"): e for e in grammar["sequence"]}
+    rows = []
+    for u in utts:
+        row = {"#": u.uid, "Utterance": u.utterance_text or ""}
+        for group, label in ce.SCORES_COLUMN_ORDER:
+            entry = entries.get(group)
+            key_row = ce.find_row_by_group(u, entry, grammar) if entry else None
+            if key_row is None:
+                row[label] = ""          # not coded for this utterance
+                continue
+            mods = [str(m).strip() for m in (key_row.modifiers or []) if str(m).strip()]
+            row[label] = ", ".join(mods) if mods else ce.short_label(grammar, key_row.behavior)
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def key_cards_html(table):
+    """One card per utterance, codes listed vertically.
+
+    A 13-column table meant scrolling sideways to read a single utterance; this
+    keeps every code for one utterance in view at once. Categories the key does
+    not code for that utterance are simply absent, which makes the rules visible
+    at a glance (Listing, or a Communicative Intent of "absent").
+    """
+    import html as _html
+
+    labels = [label for _, label in ce.SCORES_COLUMN_ORDER]
+    cards = ""
+    for _, row in table.iterrows():
+        coded = [(lab, str(row[lab]).strip()) for lab in labels if str(row[lab]).strip()]
+        body = "".join(
+            f'<div class="kcrow"><span class="kclab">{_html.escape(lab)}</span>'
+            f'<span class="kcval">{_html.escape(val)}</span></div>'
+            for lab, val in coded
+        ) or '<div class="kcnone">No further codes.</div>'
+        text = _html.escape(str(row["Utterance"]) or "no transcript")
+        cards += (
+            f'<div class="kcard"><div class="kchead">'
+            f'<span class="kcnum">#{int(row["#"]):02d}</span>"{text}"'
+            f'</div>{body}</div>'
+        )
+    return cards
 
 
 def student_hint(grammar, category_label):
@@ -938,10 +1004,34 @@ elif page == "Key Library":
 
     passports = load_reference_passports(REFERENCE_DIR)
     st.write(f"**{len(passports)} keys loaded.**")
+    st.caption(
+        "Every utterance of every key with the codes it carries, so the keys can be read "
+        "here instead of opening the files."
+    )
+
+    query = st.text_input(
+        "Find an utterance", placeholder="e.g. DOG EAT — searches every key",
+    ).strip()
+
     for p in passports:
-        with st.expander(f"{p.get('display_name')} — {p.get('utterance_count')} utterances"):
-            for u in p.get("first_utterances", []):
-                st.write(f"- {u}")
+        table = key_table(p.get("file_name"), p.get("sheet_name"))
+        shown = table
+        if query:
+            mask = table["Utterance"].str.contains(query, case=False, na=False)
+            shown = table[mask]
+            if shown.empty:
+                continue
+        title = f"{p.get('display_name')} — {len(table)} utterances"
+        if query:
+            title += f"  ·  {len(shown)} match(es)"
+        with st.expander(title, expanded=bool(query)):
+            st.markdown(key_cards_html(shown), unsafe_allow_html=True)
+    if query and not any(
+        key_table(p.get("file_name"), p.get("sheet_name"))["Utterance"]
+        .str.contains(query, case=False, na=False).any()
+        for p in passports
+    ):
+        st.info(f'No utterance contains "{query}".')
 
     st.markdown("---")
     st.subheader("Add a key")

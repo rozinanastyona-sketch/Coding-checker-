@@ -1359,6 +1359,23 @@ def write_scores_sheet(wb, scores_rows: List[Dict[str, Any]]) -> None:
         ws.column_dimensions[get_column_letter(col)].width = 14
 
 
+def coding_sheet(wb, grammar: Dict[str, Any]):
+    """The sheet the coding actually lives on.
+
+    Not wb.active: Excel stores whichever tab happened to be selected when the
+    file was last saved. A coder who looked at the Scores tab before saving made
+    every writer here open that sheet instead of the data, and the run failed with
+    "Could not find Behavior/Comment columns". The comparison itself always reads
+    the first sheet (pandas), so the sheet carrying the coding columns is chosen
+    here, with the first sheet as the fallback.
+    """
+    for ws in wb.worksheets:
+        header = {clean_text(c.value) for c in ws[1] if c.value is not None}
+        if {"Behavior", "Comment"} <= header:
+            return ws
+    return wb.worksheets[0]
+
+
 def write_annotated_excel(
     student_input_path: str | Path,
     output_path: str | Path,
@@ -1385,7 +1402,7 @@ def write_annotated_excel(
     hand from row position.
     """
     wb = load_workbook(student_input_path)
-    ws = wb.active
+    ws = coding_sheet(wb, grammar)
 
     header = [cell.value for cell in ws[1]]
     header_map = {str(v).strip(): i + 1 for i, v in enumerate(header) if v is not None}
@@ -1582,7 +1599,7 @@ def write_student_feedback_excel(
     missing_utts is a list of (insert_after_row_index, transcript).
     """
     wb = load_workbook(student_input_path)
-    ws = wb.active
+    ws = coding_sheet(wb, grammar)
 
     header = [cell.value for cell in ws[1]]
     header_map = {str(v).strip(): i + 1 for i, v in enumerate(header) if v is not None}
