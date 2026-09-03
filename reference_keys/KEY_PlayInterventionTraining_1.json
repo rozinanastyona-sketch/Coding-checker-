@@ -1,0 +1,14 @@
+{
+  "id": "KEY_PlayInterventionTraining_1",
+  "display_name": "Training Video 1 (Play Intervention)",
+  "file_name": "KEY_PlayInterventionTraining_1.xlsx",
+  "sheet_name": null,
+  "utterance_count": 36,
+  "first_utterances": [
+    "TRAIN",
+    "WASH",
+    "YELLOW TRAIN",
+    "(TURTLE) TRAIN YELLOW",
+    "(TURTLE -S YELLOW) TRAIN"
+  ]
+}
