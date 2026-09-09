@@ -408,12 +408,30 @@ def issue_category(issue):
     return "Coding"
 
 
+def _key_file_stamp(file_name):
+    """Identity of the key file as it is on disk right now.
+
+    Part of the cache key below. Without it the parse was cached by file NAME
+    alone, so a corrected key pushed to the repo kept showing its old numbers
+    until someone rebooted the app: Community Cloud pulls the new files and
+    reruns the script, but the cache lives in the same process and never learns
+    the workbook changed.
+    """
+    try:
+        s = (REFERENCE_DIR / file_name).stat()
+        return (s.st_mtime_ns, s.st_size)
+    except OSError:
+        return None
+
+
 @st.cache_data(show_spinner=False)
-def key_table(file_name, sheet_name=None):
+def _key_table_cached(file_name, sheet_name, stamp):
     """Every utterance of a key with the code it carries in each category.
 
     Cached because it parses the workbook; the Key Library shows this instead of
     the passport's first five utterances, so a key can be read in the app.
+    `stamp` is not used in the body - it is there so the cache entry dies when
+    the file does.
     """
     key_df = read_excel_first_sheet_or_named(REFERENCE_DIR / file_name, sheet_name=sheet_name)
     utts = ce.segment_utterances(
@@ -433,6 +451,10 @@ def key_table(file_name, sheet_name=None):
             row[label] = ", ".join(mods) if mods else ce.short_label(grammar, key_row.behavior)
         rows.append(row)
     return pd.DataFrame(rows)
+
+
+def key_table(file_name, sheet_name=None):
+    return _key_table_cached(file_name, sheet_name, _key_file_stamp(file_name))
 
 
 def key_cards_html(table):
@@ -467,6 +489,29 @@ def student_hint(grammar, category_label):
     """The answer-free operational-definition hint for a category, or ''."""
     hints = (grammar.get("feedback", {}) or {}).get("student_hints", {}) or {}
     return str(hints.get(category_label, "") or "")
+
+
+def video_codes() -> dict:
+    """Per-video release codes, as {key id: code}.
+
+    The student password opens the app; these codes open one video each. The
+    instructor hands a video's code out only after reviewing that student's
+    first version, which is what keeps a student from self-checking a video
+    before submitting it. Configured in st.secrets, keyed by the key's id -
+    NOT by video number, because two key families share the numbers 1-4:
+
+        [video_codes]
+        KEY_Video_1 = "..."
+        KEY_PlayInterventionTraining_1 = "..."
+
+    No section, or an empty one, means the gate is off - so a local run and the
+    teacher view stay frictionless.
+    """
+    try:
+        raw = st.secrets.get("video_codes") or {}
+        return {str(k): str(v) for k, v in dict(raw).items()}
+    except Exception:
+        return {}
 
 
 def password_ok() -> bool:
@@ -638,6 +683,41 @@ if page == "New Check":
                     "then try again."
                 )
                 st.stop()
+
+            # Release gate. The file is matched first, so the app already knows
+            # which video this is and asks for that video's code - a student
+            # cannot try a code against a video it does not belong to. Unlocked
+            # videos are remembered for the whole session, so the steps that
+            # follow, and a re-upload of the same video after fixing it, never
+            # ask again. A different video asks for its own code.
+            codes = video_codes()
+            if codes:
+                key_id = best_ref.get("id") or Path(best_ref.get("file_name", "")).stem
+                required = codes.get(key_id)
+                unlocked = st.session_state.get("unlocked_videos") or set()
+                if not required:
+                    st.error(
+                        "This video has no access code set up yet. Ask your instructor."
+                    )
+                    st.stop()
+                if key_id not in unlocked:
+                    st.info(
+                        "Recognized as "
+                        f"**{best_ref.get('display_name') or key_id}**"
+                    )
+                    st.caption(
+                        "Enter the access code for this video. Your instructor sends it "
+                        "together with the feedback on your first version."
+                    )
+                    entered = st.text_input("Access code for this video")
+                    if entered:
+                        if entered.strip() == required.strip():
+                            st.session_state["unlocked_videos"] = unlocked | {key_id}
+                            st.rerun()
+                        else:
+                            st.error("That code doesn't match this video.")
+                    st.stop()
+
             st.success("File recognized. Ready to check.")
             if st.button("Run check  ›", type="primary"):
                 run_check(best_ref)
